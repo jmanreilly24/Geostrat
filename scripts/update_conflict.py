@@ -1,18 +1,5 @@
 #!/usr/bin/env python3
-"""
-Fetch recent conflict events from the UCDP API and write a slim GeoJSON the map
-can read. Runs inside a GitHub Action on a schedule — you do not run this by hand.
-
-Output: data/conflict.geojson  (a FeatureCollection of points)
-Each point carries: weight (log-scaled deaths, ~1-7), date, country.
-
-Design notes:
-- Uses the public UCDP endpoint (no token). It's paged and rate-limited, which
-  is fine for a weekly job. A token can be added later to lift limits.
-- Probes the last several months to find the newest available Candidate version.
-- If anything fails, it exits WITHOUT touching the existing file, so the last
-  good data stays live.
-"""
+"""Fetch recent UCDP conflict events and write data/conflict.geojson."""
 
 import json, math, os, sys, datetime, urllib.request, urllib.error
 
@@ -30,7 +17,6 @@ def get(url):
 
 
 def candidate_versions():
-    """Newest-first list of plausible Candidate version strings, e.g. '26.0.4'."""
     out, today = [], datetime.date.today()
     y, m = today.year, today.month
     for _ in range(8):
