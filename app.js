@@ -9,8 +9,8 @@
 
   /* ---- palette ---------------------------------------------------------- */
   var TIER_COLOR = {
-    hegemon: "#F2C14E", great: "#E8843D", regional: "#C9582F",
-    middle: "#5B8A9E", small: "#3E5266", unclassified: "#28323F"
+    hegemon: "#FFD633", great: "#F07F2E", regional: "#C0392B",
+    middle: "#4E88A6", small: "#3B5266", unclassified: "#2A3343"
   };
   var TIER_LABEL = {
     hegemon: "Hegemon", great: "Great power", regional: "Regional power",
@@ -24,6 +24,9 @@
   ];
 
   var byId = function (id) { return document.getElementById(id); };
+
+  var COUNTRIES_GEO = null;   // decorated polygons, kept so live data can update them
+  var POWER_BY_NAME = {};     // World Bank power composite, keyed by country name
 
   /* ---- name join: map your readable names <-> world-map names ----------- */
   var nameIndex = {};
@@ -155,7 +158,8 @@
   var state = {
     hillshade: true, fill: "tier",
     nato: false, brics: false, eu: false,
-    heat: true, heartland: false, chokepoints: true
+    heat: true, heartland: false, chokepoints: true,
+    newspulse: false
   };
 
   function setVis(id, on) {
@@ -173,6 +177,7 @@
 
   function boot() {
     buildIndex();
+    POWER_BY_NAME = window.POWER_INDEX || {};
 
     var COUNTRIES_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
     fetch(COUNTRIES_URL)
@@ -181,8 +186,12 @@
         if (typeof topojson === "undefined") throw new Error("topojson decoder did not load");
         var geo = topojson.feature(topo, topo.objects.countries);
         geo.features = geo.features.map(fixAntimeridian);
+        COUNTRIES_GEO = geo;
         decorate(geo);
         addLayers(geo);
+        refreshConflict();
+        refreshPower();
+        refreshNewspulse();
         buildRail();
         wireInteraction();
         byId("overlay").classList.add("hide");
@@ -208,6 +217,7 @@
       f.properties.nato = !!(key && nato[key]);
       f.properties.brics = !!(key && brics[key]);
       f.properties.eu = !!(key && eu[key]);
+      f.properties.composite = POWER_BY_NAME[f.properties.cname] || 0;
     });
   }
 
@@ -224,6 +234,7 @@
                  geometry: { type: "Point", coordinates: [c.lng, c.lat] } };
       }))
     });
+    map.addSource("newspulse", { type: "geojson", data: window.NEWSPULSE || fc([]) });
 
     // power-tier fill
     map.addLayer({ id: "fill-tier", type: "fill", source: "countries",
@@ -238,6 +249,14 @@
       paint: { "fill-color": ["match", ["get", "role"],
         "agent", "#3FA37A", "pivot", "#D98AE0", "rgba(0,0,0,0)"],
         "fill-opacity": 0.6 },
+      layout: { visibility: "none" } });
+
+    // computed power composite (World Bank) — continuous ramp
+    map.addLayer({ id: "fill-power", type: "fill", source: "countries",
+      paint: { "fill-color": ["interpolate", ["linear"], ["get", "composite"],
+        0, "#2A3343", 0.01, "#5B4A22", 0.03, "#8A6A1E",
+        0.06, "#C28A2A", 0.12, "#F0A83C", 0.2, "#FFD633"],
+        "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
     // crisp borders
@@ -281,6 +300,14 @@
         "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", visibility: "visible" },
       paint: { "text-color": "#E8E6DF", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
 
+    // GDELT news-pulse — cool dots sized by mention count
+    map.addLayer({ id: "newspulse", type: "circle", source: "newspulse",
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["get", "count"], 1, 2.5, 50, 9, 500, 16],
+        "circle-color": "#5BC8FF", "circle-opacity": 0.45,
+        "circle-stroke-color": "#0B1020", "circle-stroke-width": 0.5 },
+      layout: { visibility: "none" } });
+
     // transparent always-on hit layer for clicks
     map.addLayer({ id: "countries-hit", type: "fill", source: "countries",
       paint: { "fill-color": "#000", "fill-opacity": 0 } });
@@ -291,6 +318,50 @@
   function applyFill() {
     setVis("fill-tier", state.fill === "tier");
     setVis("fill-role", state.fill === "role");
+    setVis("fill-power", state.fill === "power");
+  }
+
+  /* swap the sample heat points for the live UCDP file once it exists in /data.
+     Updated weekly by the GitHub Action; failure here just keeps the sample. */
+  function refreshConflict() {
+    fetch("data/conflict.geojson", { cache: "no-store" })
+      .then(function (r) { if (r.ok) return r.json(); throw new Error("no file"); })
+      .then(function (d) {
+        var s = map.getSource("conflict");
+        if (s && d && d.features && d.features.length) {
+          s.setData(d);
+          var heatRow = byId("cb-heat");
+          if (heatRow) {
+            var span = heatRow.parentNode.querySelector(".label");
+            if (span) span.textContent = "Violence density (UCDP, live)";
+          }
+        }
+      })
+      .catch(function () { /* keep the bundled sample */ });
+  }
+
+  /* swap sample power index for the live World Bank file once the Action writes it. */
+  function refreshPower() {
+    fetch("data/power-index.json", { cache: "no-store" })
+      .then(function (r) { if (r.ok) return r.json(); throw new Error("no file"); })
+      .then(function (d) { if (d && typeof d === "object") { POWER_BY_NAME = d; applyComposite(); } })
+      .catch(function () { /* keep the bundled sample */ });
+  }
+  function applyComposite() {
+    if (!COUNTRIES_GEO) return;
+    COUNTRIES_GEO.features.forEach(function (f) {
+      f.properties.composite = POWER_BY_NAME[f.properties.cname] || 0;
+    });
+    var s = map.getSource("countries");
+    if (s) s.setData(COUNTRIES_GEO);
+  }
+
+  /* load the live GDELT news-pulse file (written every few hours by the Action). */
+  function refreshNewspulse() {
+    fetch("data/newspulse.geojson", { cache: "no-store" })
+      .then(function (r) { if (r.ok) return r.json(); throw new Error("no file"); })
+      .then(function (d) { var s = map.getSource("newspulse"); if (s && d) s.setData(d); })
+      .catch(function () { /* layer stays empty until the Action runs */ });
   }
 
   /* ---- control rail ----------------------------------------------------- */
@@ -314,6 +385,7 @@
       row("rad", "fill-none", "None", state.fill === "none", "fillgrp") +
       row("rad", "fill-tier", "Power tier", state.fill === "tier", "fillgrp") +
       row("rad", "fill-role", "Agent / pivot", state.fill === "role", "fillgrp") +
+      row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp") +
       '<div class="legend" id="legend"></div>' +
 
       "<h2>Alliances &amp; blocs — stack</h2>" +
@@ -321,7 +393,11 @@
 
       "<h2>Conflict &amp; tension — stack</h2>" +
       row("chk", "heat", "Violence density (sample)", state.heat, null, "#ff6a3d") +
-      '<p class="hint">Live UCDP feed and your editorial tension layer come next.</p>' +
+      '<p class="hint">Your editorial tension layer comes next.</p>' +
+
+      "<h2>Live signals — stack</h2>" +
+      '<p class="hint">News-mention geography from GDELT, refreshed every few hours. Noisy by nature.</p>' +
+      row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
 
       "<h2>Classical theory</h2>" +
       row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
@@ -330,13 +406,14 @@
       row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D");
 
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role"].forEach(function (v) {
+    ["none", "tier", "role", "power"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
     });
     BLOCS.forEach(function (b) {
       byId("cb-" + b.key).onchange = function (e) { state[b.key] = e.target.checked; setVis("bloc-" + b.key, state[b.key]); tele(); };
     });
     byId("cb-heat").onchange = function (e) { state.heat = e.target.checked; setVis("conflict-heat", state.heat); tele(); };
+    byId("cb-newspulse").onchange = function (e) { state.newspulse = e.target.checked; setVis("newspulse", state.newspulse); tele(); };
     byId("cb-heartland").onchange = function (e) {
       state.heartland = e.target.checked;
       setVis("zone-heartland-fill", state.heartland); setVis("zone-heartland-line", state.heartland); tele();
@@ -357,6 +434,8 @@
          ["Middle", TIER_COLOR.middle], ["Small", TIER_COLOR.small], ["Unclassified", TIER_COLOR.unclassified]]
       : state.fill === "role"
       ? [["Agent", "#3FA37A"], ["Pivot", "#D98AE0"]]
+      : state.fill === "power"
+      ? [["Lower", "#3B5266"], ["", "#C28A2A"], ["Higher", "#FFD633"]]
       : [];
     el.innerHTML = items.map(function (i) {
       return '<span><i style="background:' + i[1] + '"></i>' + i[0] + "</span>";
@@ -370,7 +449,8 @@
     byId("t-zoom").textContent = map.getZoom().toFixed(1);
     var n = (state.fill !== "none" ? 1 : 0) + (state.hillshade ? 1 : 0) +
             (state.nato ? 1 : 0) + (state.brics ? 1 : 0) + (state.eu ? 1 : 0) +
-            (state.heat ? 1 : 0) + (state.heartland ? 1 : 0) + (state.chokepoints ? 1 : 0);
+            (state.heat ? 1 : 0) + (state.heartland ? 1 : 0) + (state.chokepoints ? 1 : 0) +
+            (state.newspulse ? 1 : 0);
     byId("t-layers").textContent = n;
   }
   map.on("move", tele);
