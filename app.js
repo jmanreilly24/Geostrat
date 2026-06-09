@@ -45,6 +45,69 @@
   }
   function canonical(name) { return nameIndex[norm(name)] || null; }
 
+  /* ---- fix polygons crossing the 180° meridian (Russia, Fiji, …) ---------
+     On a globe these smear into a wedge across the Arctic. We split each
+     crossing polygon at the antimeridian. Per-feature try/catch means a
+     failure just leaves that country untouched rather than breaking the map. */
+  function amCrosses(ring) {
+    for (var i = 1; i < ring.length; i++)
+      if (Math.abs(ring[i][0] - ring[i - 1][0]) > 180) return true;
+    return false;
+  }
+  function amUnwrap(ring) {
+    var out = [ring[0].slice()], prev = ring[0][0];
+    for (var i = 1; i < ring.length; i++) {
+      var lng = ring[i][0];
+      while (lng - prev > 180) lng -= 360;
+      while (lng - prev < -180) lng += 360;
+      out.push([lng, ring[i][1]]); prev = lng;
+    }
+    return out;
+  }
+  function amClip(ring, leftSide) {
+    var res = [], n = ring.length;
+    for (var i = 0; i < n; i++) {
+      var cur = ring[i], nxt = ring[(i + 1) % n];
+      var curIn = leftSide ? cur[0] <= 180 : cur[0] >= 180;
+      var nxtIn = leftSide ? nxt[0] <= 180 : nxt[0] >= 180;
+      if (curIn) res.push(cur);
+      if (curIn !== nxtIn) {
+        var t = (180 - cur[0]) / (nxt[0] - cur[0]);
+        res.push([180, cur[1] + t * (nxt[1] - cur[1])]);
+      }
+    }
+    return res;
+  }
+  function amClose(r) {
+    if (r.length && (r[0][0] !== r[r.length - 1][0] || r[0][1] !== r[r.length - 1][1])) r.push(r[0].slice());
+    return r;
+  }
+  function amSplit(outer) {
+    var uw = amUnwrap(outer);
+    var left = amClose(amClip(uw, true));
+    var right = amClose(amClip(uw, false).map(function (p) { return [p[0] - 360, p[1]]; }));
+    var res = [];
+    if (left.length >= 4) res.push(left);
+    if (right.length >= 4) res.push(right);
+    return res;
+  }
+  function fixAntimeridian(f) {
+    try {
+      var g = f.geometry;
+      if (!g) return f;
+      var polys = g.type === "Polygon" ? [g.coordinates]
+                : g.type === "MultiPolygon" ? g.coordinates : null;
+      if (!polys) return f;
+      var out = [];
+      polys.forEach(function (rings) {
+        if (amCrosses(rings[0])) amSplit(rings[0]).forEach(function (r) { out.push([r]); });
+        else out.push(rings);
+      });
+      f.geometry = { type: "MultiPolygon", coordinates: out };
+    } catch (e) { /* leave feature unchanged */ }
+    return f;
+  }
+
   /* ---- the globe -------------------------------------------------------- */
   var style = {
     version: 8,
@@ -117,6 +180,7 @@
       .then(function (topo) {
         if (typeof topojson === "undefined") throw new Error("topojson decoder did not load");
         var geo = topojson.feature(topo, topo.objects.countries);
+        geo.features = geo.features.map(fixAntimeridian);
         decorate(geo);
         addLayers(geo);
         buildRail();
