@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Geostrat — interactive geostrategic globe</title>
+
+  <!-- MapLibre GL (globe-capable) -->
+  <link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet" />
+  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
+  <!-- TopoJSON decoder (to turn the world map data into polygons) -->
+  <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link href="styles.css" rel="stylesheet" />
+</head>
+<body>
+  <div id="map"></div>
+
+  <header class="masthead">
+    <p class="eyebrow">Geostrategic Atlas</p>
+    <h1>The World, in Layers</h1>
+  </header>
+
+  <!-- Control rail — populated by app.js -->
+  <aside class="rail" id="rail" aria-label="Map layers"></aside>
+
+  <!-- Telemetry strip -->
+  <div class="telemetry" id="telemetry">
+    <span><span class="dot">◎</span> <b id="t-coords">0.0°, 0.0°</b></span>
+    <span>ZOOM <b id="t-zoom">2.0</b></span>
+    <span>LAYERS <b id="t-layers">0</b></span>
+    <span class="spin" id="t-spin" role="button" tabindex="0">SPIN ▷</span>
+  </div>
+
+  <!-- Country info card -->
+  <div class="card" id="card">
+    <button class="close" id="card-close" aria-label="Close">✕</button>
+    <p class="name" id="card-name">—</p>
+    <p class="field">Power tier</p>
+    <p class="value" id="card-tier">—</p>
+    <p class="field">Strategic role</p>
+    <p class="value" id="card-role">—</p>
+    <p class="field">Blocs</p>
+    <div class="chips" id="card-blocs"></div>
+  </div>
+
+  <!-- Loading overlay -->
+  <div class="overlay" id="overlay"><p class="pulse" id="overlay-msg">Acquiring world geometry…</p></div>
+
+  <!-- Data (edit these in /data — no code required) -->
+  <script src="data/countries.js"></script>
+  <script src="data/chokepoints.js"></script>
+  <script src="data/conflict-sample.js"></script>
+  <script src="data/theory-zones.js"></script>
+
+  <!-- App -->
+  <script src="app.js"></script>
+</body>
+</html>
