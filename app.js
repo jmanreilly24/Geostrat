@@ -34,7 +34,9 @@
     { key: "arabLeague", label: "Arab League", color: "#A3CB38", group: "eco" },
     { key: "au", label: "African Union", color: "#D4915D", group: "eco" },
     { key: "opecPlus", label: "OPEC+", color: "#E1B12C", group: "eco" },
-    { key: "mercosur", label: "Mercosur", color: "#74B9FF", group: "eco" }
+    { key: "mercosur", label: "Mercosur", color: "#74B9FF", group: "eco" },
+    { key: "commonwealth", label: "Commonwealth", color: "#8FBF9F", group: "eco" },
+    { key: "oas", label: "OAS", color: "#E8836F", group: "eco" }
   ];
 
   var byId = function (id) { return document.getElementById(id); };
@@ -178,7 +180,7 @@
   var state = {
     hillshade: true, fill: "tier", stat: "none",
     heat: true, heartland: false, rimland: false, nuclear: false,
-    chokepoints: true, newspulse: false, lanes: false, portwatch: false,
+    chokepoints: true, newspulse: false, lanes: false, portwatch: false, bri: false,
     allymode: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
@@ -294,6 +296,10 @@
                geometry: { type: "MultiLineString", coordinates: r.segments } };
     })) });
     map.addSource("portwatch", { type: "geojson", data: fc([]) });
+    map.addSource("bri", { type: "geojson", data: fc((window.BRI_CORRIDORS || []).map(function (r) {
+      return { type: "Feature", properties: { name: r.name, w: r.w },
+               geometry: { type: "MultiLineString", coordinates: r.segments } };
+    })) });
     COUNTRY_POINTS_GEO = buildCountryPoints(geo);
     map.addSource("country-points", { type: "geojson", data: COUNTRY_POINTS_GEO });
 
@@ -393,6 +399,25 @@
         "circle-color": "#49C5B6", "circle-opacity": 0.15,
         "circle-stroke-color": "#6FE3D4", "circle-stroke-width": 1.6, "circle-stroke-opacity": 0.9 },
       layout: { visibility: "none" } });
+    map.addLayer({ id: "portwatch-label", type: "symbol", source: "portwatch",
+      layout: { "text-field": ["concat", ["to-string", ["get", "calls"]], "/day"],
+        "text-font": ["Open Sans Regular"], "text-size": 10,
+        "text-offset": [0, 1.6], "text-anchor": "top", visibility: "none" },
+      paint: { "text-color": "#6FE3D4", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
+
+    // Belt and Road corridors
+    map.addLayer({ id: "bri-line", type: "line", source: "bri",
+      paint: { "line-color": "#E8A33D", "line-opacity": 0.75, "line-dasharray": [2.2, 1.6],
+        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 1, 10, 3] },
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
+
+    // numeric labels under stat circles
+    map.addLayer({ id: "stat-labels", type: "symbol", source: "country-points",
+      filter: [">", ["get", "r"], 0],
+      layout: { "text-field": ["get", "lbl"], "text-font": ["Open Sans Regular"],
+        "text-size": 10, "text-offset": [0, 0.6], "text-anchor": "top",
+        "text-allow-overlap": false, visibility: "none" },
+      paint: { "text-color": "#F0B450", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
 
     // conflict heatmap
     map.addLayer({ id: "conflict-heat", type: "heatmap", source: "conflict",
@@ -500,16 +525,23 @@
     COUNTRY_POINTS_GEO.features.forEach(function (f) { var v = f.properties[metric] || 0; if (v > max) max = v; });
     return max;
   }
+  function statLabel(metric, v) {
+    if (!v) return "";
+    if (metric === "renew") return Math.round(v) + "%";
+    if (metric === "gdp" || metric === "gdppc" || metric === "milex") return fmtUSD(v);
+    return fmtNum(v);
+  }
   function switchStat(metric) {
     state.stat = metric;
-    if (metric === "none") { setVis("stat-circles", false); tele(); return; }
+    if (metric === "none") { setVis("stat-circles", false); setVis("stat-labels", false); tele(); return; }
     var max = statMax(metric);
     COUNTRY_POINTS_GEO.features.forEach(function (f) {
       var v = f.properties[metric] || 0;
       f.properties.r = (v > 0 && max > 0) ? Math.sqrt(v / max) * 30 + 2 : 0;
+      f.properties.lbl = statLabel(metric, v);
     });
     var s = map.getSource("country-points"); if (s) s.setData(COUNTRY_POINTS_GEO);
-    setVis("stat-circles", true);
+    setVis("stat-circles", true); setVis("stat-labels", true);
     tele();
   }
   function rebuildStats() {
@@ -627,7 +659,8 @@
 
       sec("ship", "Economy &amp; connectivity — stack",
         row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6") +
-        row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4"),
+        row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4") +
+        row("chk", "bri", "Belt &amp; Road corridors", state.bri, null, "#E8A33D"),
         "Rings sized by 7-day avg daily transits, updated weekly.") +
 
       sec("signals", "Live signals — stack",
@@ -686,7 +719,11 @@
       setVis("lanes-glow", state.lanes); setVis("lanes-core", state.lanes); tele();
     };
     byId("cb-portwatch").onchange = function (e) {
-      state.portwatch = e.target.checked; setVis("portwatch-ring", state.portwatch); tele();
+      state.portwatch = e.target.checked;
+      setVis("portwatch-ring", state.portwatch); setVis("portwatch-label", state.portwatch); tele();
+    };
+    byId("cb-bri").onchange = function (e) {
+      state.bri = e.target.checked; setVis("bri-line", state.bri); tele();
     };
     byId("cb-allymode").onchange = function (e) {
       state.allymode = e.target.checked;
@@ -728,7 +765,7 @@
             (state.hillshade ? 1 : 0) + (state.heat ? 1 : 0) +
             (state.heartland ? 1 : 0) + (state.rimland ? 1 : 0) + (state.nuclear ? 1 : 0) +
             (state.chokepoints ? 1 : 0) + (state.newspulse ? 1 : 0) +
-            (state.lanes ? 1 : 0) + (state.portwatch ? 1 : 0);
+            (state.lanes ? 1 : 0) + (state.portwatch ? 1 : 0) + (state.bri ? 1 : 0);
     BLOCS.forEach(function (b) { if (state[b.key]) n++; });
     byId("t-layers").textContent = n;
   }

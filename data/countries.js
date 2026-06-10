@@ -93,7 +93,22 @@ window.MEMBERSHIPS = {
     "Russia","Kazakhstan","Azerbaijan","Bahrain","Brunei","Malaysia","Mexico",
     "Oman","S. Sudan","Sudan"
   ],
-  mercosur: ["Brazil","Argentina","Uruguay","Paraguay","Bolivia"]
+  mercosur: ["Brazil","Argentina","Uruguay","Paraguay","Bolivia"],
+  commonwealth: [
+    "United Kingdom","Canada","Australia","New Zealand","India","Pakistan",
+    "Bangladesh","Sri Lanka","Malaysia","Brunei","Singapore","Papua New Guinea",
+    "Fiji","Solomon Is.","Vanuatu","South Africa","Nigeria","Ghana","Kenya",
+    "Tanzania","Uganda","Zambia","Malawi","Mozambique","Namibia","Botswana",
+    "eSwatini","Lesotho","Sierra Leone","Gambia","Cameroon","Rwanda","Mauritius",
+    "Jamaica","Trinidad and Tobago","Guyana","Belize","Bahamas","Cyprus","Malta",
+    "Togo","Gabon"
+  ],
+  oas: [ // Organization of American States (Venezuela withdrew 2019)
+    "Argentina","Bahamas","Belize","Bolivia","Brazil","Canada","Chile","Colombia",
+    "Costa Rica","Cuba","Dominican Rep.","Ecuador","El Salvador","Guatemala",
+    "Guyana","Haiti","Honduras","Jamaica","Mexico","Nicaragua","Panama",
+    "Paraguay","Peru","Suriname","Trinidad and Tobago","United States","Uruguay"
+  ]
 };
 
 /* ---- SPYKMAN RIMLAND (editorial — refine freely) ------------------------- */
@@ -116,8 +131,9 @@ window.NUCLEAR = [
 /* ---- ALLY DERIVATION (used by "Ally highlight on click") ------------------
    Allies = everyone sharing a bloc listed here, plus bilateral pairs below.  */
 window.ALLIANCE_CONFIG = {
-  military: ["nato","csto","aukus","fiveEyes","quad"],
-  economic: ["eu","eaeu","asean","gcc","mercosur","brics"]
+  military: ["nato","csto","aukus","fiveEyes","quad","sco"],
+  economic: ["eu","eaeu","asean","gcc","mercosur","brics","arabLeague","au",
+             "opecPlus","commonwealth","oas"]
 };
 window.BILATERAL_PACTS = {
   military: [
