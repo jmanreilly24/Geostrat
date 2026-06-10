@@ -25,8 +25,9 @@ def get(url):
 
 def main():
     since = (datetime.date.today() - datetime.timedelta(days=DAYS_BACK)).isoformat()
-    params = {
-        "where": "date >= TIMESTAMP '{} 00:00:00'".format(since),
+   params = {
+        "where": "1=1",
+        "orderByFields": "date DESC",
         "outFields": "portid,portname,date,vessel_count_total",
         "outSR": "4326", "f": "json", "returnGeometry": "true",
         "resultRecordCount": "1000",
