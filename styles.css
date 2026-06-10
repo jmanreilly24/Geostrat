@@ -59,6 +59,14 @@ html, body {
 .rail::-webkit-scrollbar { width: 8px; }
 .rail::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 8px; }
 
+.rail .reset {
+  width: 100%; margin: 0 0 10px; padding: 6px 0; cursor: pointer;
+  font-family: "IBM Plex Mono", monospace; font-size: 11px; letter-spacing: 0.12em;
+  color: var(--parchment); background: none; border: 1px solid var(--hairline);
+  border-radius: 7px; transition: all 120ms ease;
+}
+.rail .reset:hover { border-color: var(--signal); color: var(--signal); }
+
 .rail h2 {
   font-family: "IBM Plex Mono", monospace; font-size: 10px; letter-spacing: 0.24em;
   text-transform: uppercase; color: var(--muted); margin: 16px 0 7px;

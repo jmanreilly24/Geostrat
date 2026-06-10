@@ -1,4 +1,6 @@
-# Geostrat — interactive geostrategic globe
+# Geostrat
+
+© 2026 [YOUR FULL LEGAL NAME]. All rights reserved — see LICENSE.md. — interactive geostrategic globe
 
 An interactive 3D globe for viewing the world through toggleable strategic
 layers: power tiers, alliance blocs, conflict density, classical-theory zones,

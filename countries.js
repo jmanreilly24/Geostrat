@@ -119,7 +119,11 @@ window.RIMLAND = [
   "Qatar","Kuwait","Bahrain","Iran","Afghanistan","Pakistan","India",
   "Bangladesh","Myanmar","Thailand","Malaysia","Cambodia","Vietnam",
   "China","South Korea","North Korea"
-  // Spykman's offshore islands (UK, Japan, etc.) intentionally excluded
+];
+/* Spykman offshore islands & continents (shown with the Rimland toggle) */
+window.RIMLAND_OFFSHORE = [
+  "United Kingdom","Ireland","Iceland","Japan","Taiwan","Philippines",
+  "Indonesia","Sri Lanka","Australia","New Zealand"
 ];
 
 /* ---- NUCLEAR WEAPONS STATES ---------------------------------------------- */
@@ -131,7 +135,7 @@ window.NUCLEAR = [
 /* ---- ALLY DERIVATION (used by "Ally highlight on click") ------------------
    Allies = everyone sharing a bloc listed here, plus bilateral pairs below.  */
 window.ALLIANCE_CONFIG = {
-  military: ["nato","csto","aukus","fiveEyes","quad","sco"],
+  military: ["nato","csto","aukus","fiveEyes","quad"], // SCO excluded: forum, not a defense pact
   economic: ["eu","eaeu","asean","gcc","mercosur","brics","arabLeague","au",
              "opecPlus","commonwealth","oas"]
 };

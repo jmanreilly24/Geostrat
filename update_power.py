@@ -7,12 +7,14 @@ OUT = os.path.join(os.path.dirname(__file__), "..", "data", "power-index.json")
 BASE = "https://api.worldbank.org/v2/country/all/indicator/{code}?format=json&per_page=400&mrnev=1"
 UA = {"User-Agent": "geostrat-map/1.0 (GitHub Action)"}
 
+# each metric lists candidate codes, tried in order until one succeeds
 INDICATORS = {
-    "gdp": "NY.GDP.MKTP.CD", "gdppc": "NY.GDP.PCAP.CD", "pop": "SP.POP.TOTL",
-    "urb": "SP.URB.TOTL", "milex": "MS.MIL.XPND.CD", "milper": "MS.MIL.TOTL.P1",
-    "renew": "EG.ELC.RNEW.ZS",  # renewable electricity, % of output (latest available)
-    "gini": "SI.POV.GINI",
-    "trade": "NE.RSB.GNFS.ZS",  # external balance goods+services, % of GDP
+    "gdp": ["NY.GDP.MKTP.CD"], "gdppc": ["NY.GDP.PCAP.CD"], "pop": ["SP.POP.TOTL"],
+    "urb": ["SP.URB.TOTL"], "milex": ["MS.MIL.XPND.CD"], "milper": ["MS.MIL.TOTL.P1"],
+    "renew": ["EG.FEC.RNEW.ZS", "EG.ELC.RNEW.ZS"],  # renewable energy share
+    "gini": ["SI.POV.GINI"],
+    "trade": ["BN.CAB.XOKA.GD.ZS", "NE.RSB.GNFS.ZS"],  # current acct / ext balance % GDP
+    "tradeusd": ["BN.CAB.XOKA.CD"],  # current account balance, current US$/yr
 }
 COMPOSITE_KEYS = ["milex", "milper", "pop", "urb", "gdp"]
 
@@ -105,13 +107,15 @@ def fetch_indicator(code):
 def main():
     raw, world = {}, {}
     ok = 0
-    for key, code in INDICATORS.items():
-        try:
-            raw[key], world[key] = fetch_indicator(code)
-            ok += 1
-        except Exception as e:
-            print("indicator", key, "failed:", e)
-            raw[key], world[key] = {}, 1.0
+    for key, codes in INDICATORS.items():
+        raw[key], world[key] = {}, 1.0
+        for code in codes:
+            try:
+                raw[key], world[key] = fetch_indicator(code)
+                ok += 1
+                break
+            except Exception as e:
+                print("indicator", key, "code", code, "failed:", e)
     if ok == 0:
         print("All indicator fetches failed — leaving existing file untouched.")
         sys.exit(0)
@@ -126,7 +130,7 @@ def main():
         entry = {"iso3": iso3}
         if shares:
             entry["composite"] = round(sum(shares) / len(shares), 4)
-        for k in ("gdp", "gdppc", "pop", "milex", "milper", "renew", "gini", "trade"):
+        for k in ("gdp", "gdppc", "pop", "milex", "milper", "renew", "gini", "trade", "tradeusd"):
             v = raw.get(k, {}).get(iso3)
             if v is not None:
                 entry[k] = round(v)

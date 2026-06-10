@@ -251,6 +251,12 @@
       f.properties.gini = (st.gini === undefined ? -1 : st.gini);
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
       f.properties.relig = (window.RELIGION || {})[f.properties.cname] || "none";
+      f.properties.offshore = !!(key && listSet(window.RIMLAND_OFFSHORE)[key]);
+      var ct = "";
+      (window.CONFLICTS || []).forEach(function (cf) {
+        if (cf.parties.indexOf(f.properties.cname) >= 0 && !ct) ct = cf.type;
+      });
+      f.properties.conflict = ct;
     });
   }
 
@@ -334,14 +340,14 @@
     // renewables — % of electricity output, green ramp
     map.addLayer({ id: "fill-renew", type: "fill", source: "countries",
       paint: { "fill-color": ["interpolate", ["linear"], ["get", "renew"],
-        0, "#2A3343", 20, "#2E5247", 45, "#2F7556", 70, "#36A06A", 95, "#3FE08A"],
+        0, "#58708F", 25, "#46946E", 50, "#3AB374", 75, "#3FD685", 100, "#7CFFB0"],
         "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
     // military spending fill (USD, log-ish stops)
     map.addLayer({ id: "fill-milex", type: "fill", source: "countries",
       paint: { "fill-color": ["interpolate", ["linear"], ["get", "milexv"],
-        0, "#2A3343", 1e9, "#5A3A3A", 1e10, "#8E4538", 6e10, "#C2552E", 3e11, "#F07F2E", 9e11, "#FFD633"],
+        0, "#3B4D63", 1e9, "#8A7245", 1e10, "#C28A35", 6e10, "#E89A3D", 3e11, "#FF9A4D", 9e11, "#FFD633"],
         "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
@@ -355,7 +361,7 @@
     // trade balance fill (diverging; missing = -999 dark)
     map.addLayer({ id: "fill-trade", type: "fill", source: "countries",
       paint: { "fill-color": ["interpolate", ["linear"], ["get", "trade"],
-        -999, "#2A3343", -20, "#E84393", -5, "#8E4538", 0, "#3B5266", 5, "#2F7556", 20, "#3FE08A"],
+        -999, "#2A3343", -20, "#FF5C8A", -8, "#D96A57", 0, "#8A93A6", 8, "#4ECB7E", 20, "#3FE08A"],
         "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
@@ -366,6 +372,23 @@
         "buddhist", "#C9A227", "jewish", "#5BC8FF", "folk", "#B57EDC",
         "unaffiliated", "#8A93A6", "#2A3343"],
         "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // active conflicts fill
+    map.addLayer({ id: "fill-conflict", type: "fill", source: "countries",
+      paint: { "fill-color": ["match", ["get", "conflict"],
+        "interstate", "#FF4D4D", "intl-civil", "#E8843D", "civil", "#C9A227", "#222C3B"],
+        "fill-opacity": 0.6 },
+      layout: { visibility: "none" } });
+
+    // Spykman offshore islands (shown with Rimland toggle)
+    map.addLayer({ id: "offshore-fill", type: "fill", source: "countries",
+      filter: ["==", ["get", "offshore"], true],
+      paint: { "fill-color": "#7E93B8", "fill-opacity": 0.3 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "offshore-line", type: "line", source: "countries",
+      filter: ["==", ["get", "offshore"], true],
+      paint: { "line-color": "#7E93B8", "line-width": 1, "line-opacity": 0.55 },
       layout: { visibility: "none" } });
 
     // crisp borders
@@ -524,6 +547,7 @@
     setVis("fill-gini", state.fill === "gini");
     setVis("fill-trade", state.fill === "trade");
     setVis("fill-religion", state.fill === "religion");
+    setVis("fill-conflict", state.fill === "conflict");
   }
 
   /* swap the sample heat points for the live UCDP file once it exists in /data.
@@ -689,6 +713,7 @@
       .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("");
 
     rail.innerHTML =
+      '<button class="reset" id="btn-reset">All layers off</button>' +
       sec("base", "Base",
         row("chk", "hillshade", "Terrain &amp; elevation", state.hillshade)) +
 
@@ -702,6 +727,7 @@
         row("rad", "fill-gini", "Inequality (Gini)", state.fill === "gini", "fillgrp") +
         row("rad", "fill-trade", "Trade balance (% GDP)", state.fill === "trade", "fillgrp") +
         row("rad", "fill-religion", "Majority religion", state.fill === "religion", "fillgrp") +
+        row("rad", "fill-conflict", "Active conflicts", state.fill === "conflict", "fillgrp") +
         '<div class="legend" id="legend"></div>',
         "Only one can paint the countries at a time.") +
 
@@ -734,7 +760,7 @@
 
       sec("theory", "Classical theory",
         row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
-        row("chk", "rimland", "Spykman Rimland (countries)", state.rimland, null, "#C8B08A")) +
+        row("chk", "rimland", "Spykman Rimland + offshore", state.rimland, null, "#C8B08A")) +
 
       sec("status", "Status — stack",
         row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A")) +
@@ -745,7 +771,27 @@
         "Click a country: military allies blue, economic green, adversaries red.") +
 
       sec("ref", "Reference — stack",
-        row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D"));
+        row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D")) +
+      '<p class="hint" style="margin-top:12px">Data: Natural Earth · World Bank (CC BY-4.0) · UCDP · IMF PortWatch · OSM/CARTO · AWS Terrain. Conflict synopses: sources per entry.</p>';
+
+    byId("btn-reset").onclick = function () {
+      state.fill = "none"; state.stat = "none";
+      ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
+       "newspulse","lanes","portwatch","bri","allymode","advmode"].forEach(function (k) { state[k] = false; });
+      BLOCS.forEach(function (b) { state[b.key] = false; });
+      applyFill(); switchStat("none");
+      [["hillshade",["hillshade"]],["heat",["conflict-heat"]],
+       ["heartland",["zone-heartland-fill","zone-heartland-line"]],
+       ["rimland",["rimland-fill","rimland-line","offshore-fill","offshore-line"]],
+       ["nuclear",["nuclear-fill","nuclear-line"]],
+       ["chokepoints",["chokepoint-dot","chokepoint-label"]],
+       ["newspulse",["newspulse"]],["lanes",["lanes-glow","lanes-core"]],
+       ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-line"]]
+      ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
+      BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
+      clearAllies(); clearAdversaries();
+      buildRail(); updateLegend(); tele();
+    };
 
     // collapsible headers
     Array.prototype.forEach.call(rail.querySelectorAll("h2.sec"), function (h) {
@@ -757,7 +803,7 @@
     });
 
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion"].forEach(function (v) {
+    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
     });
     ["none", "pop", "gdp", "gdppc", "milex", "milper", "renew"].forEach(function (m) {
@@ -774,7 +820,8 @@
     };
     byId("cb-rimland").onchange = function (e) {
       state.rimland = e.target.checked;
-      setVis("rimland-fill", state.rimland); setVis("rimland-line", state.rimland); tele();
+      setVis("rimland-fill", state.rimland); setVis("rimland-line", state.rimland);
+      setVis("offshore-fill", state.rimland); setVis("offshore-line", state.rimland); tele();
     };
     byId("cb-nuclear").onchange = function (e) {
       state.nuclear = e.target.checked;
@@ -827,6 +874,8 @@
       ? [["Equal 25", "#4E88A6"], ["40", "#E8843D"], ["Unequal 55", "#E84393"]]
       : state.fill === "trade"
       ? [["Deficit", "#E84393"], ["0", "#3B5266"], ["Surplus", "#3FE08A"]]
+      : state.fill === "conflict"
+      ? [["Interstate", "#FF4D4D"], ["Intl. civil/proxy", "#E8843D"], ["Civil", "#C9A227"]]
       : state.fill === "religion"
       ? [["Christian", "#6C8EBF"], ["Muslim", "#3FA37A"], ["Hindu", "#E8843D"],
          ["Buddhist", "#C9A227"], ["Jewish", "#5BC8FF"], ["Folk", "#B57EDC"],
@@ -912,8 +961,18 @@
         "<br>Forces " + fmtNum(st.milper) +
         (st.renew ? " &middot; Renewables " + Math.round(st.renew) + "%" : "") +
         (st.gini !== undefined ? "<br>Gini " + Math.round(st.gini) : "") +
-        (st.trade !== undefined ? " &middot; Trade bal " + (st.trade > 0 ? "+" : "") + st.trade.toFixed(1) + "% GDP" : "")
+        (st.trade !== undefined ? " &middot; Trade bal " + (st.trade > 0 ? "+" : "") + st.trade.toFixed(1) + "% GDP" : "") +
+        (st.tradeusd !== undefined ? " (" + (st.tradeusd < 0 ? "&minus;" : "+") + fmtUSD(Math.abs(st.tradeusd)) + "/yr)" : "")
       : "—");
+    var confs = (window.CONFLICTS || []).filter(function (cf) {
+      return cf.parties.indexOf(p.cname) >= 0;
+    });
+    setHTML("card-conflict", confs.length ? confs.map(function (cf) {
+      return "<b>" + cf.name + "</b> (" + cf.type + ", since " + cf.since + ")<br>" +
+             cf.cause + "<br>" + cf.casualties +
+             "<br><i>Source: " + cf.source + "</i>";
+    }).join("<hr>") : "—");
+
     var wb = byId("card-wb");
     if (wb) {
       if (st.iso3) { wb.href = "https://data.worldbank.org/country/" + st.iso3; wb.style.display = "inline-block"; }
