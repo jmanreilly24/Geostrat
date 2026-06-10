@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Download the latest UCDP Candidate Events CSV (free, static, no token) -> data/conflict.geojson."""
+"""
+Download the latest UCDP Candidate Events CSV (a free, static, no-token file) and
+write a slim data/conflict.geojson for the map.
+
+UCDP locked its live API behind tokens in Feb 2026, but the bulk data files on the
+download page remain open (CC BY 4.0). This script reads that page, finds the
+newest Candidate CSV link automatically, downloads it, and converts it.
+
+Fails safe: on any trouble it leaves the existing file untouched.
+"""
 
 import csv, io, json, math, os, re, sys, datetime, urllib.request
 
@@ -21,7 +30,7 @@ def find_csv_url():
     try:
         hits = PATTERN.findall(fetch_text(DOWNLOADS))
         if hits:
-            return hits[0]
+            return hits[0]   # page lists newest first
     except Exception as e:
         print("Could not read download page, using fallback:", e)
     return FALLBACK

@@ -74,9 +74,11 @@ proven with real (if partial) data. Filling in the rest is mostly editing data.
 - [x] **Heat layer** — violence density (sample data; mechanism complete)
 - [x] **Zone layer** — Mackinder Heartland (approximate)
 - [x] **Point/label layer** — chokepoints & straits
+- [x] **Auto-updating UCDP conflict feed** (weekly GitHub Action → committed GeoJSON)
+- [x] **Computed power fill** from World Bank indicators (weekly Action, CINC-style composite)
+- [x] **GDELT news-pulse** live signal layer (Action every few hours)
 
 ### Next up (priority order)
-- [ ] **Live UCDP feed** for the violence heatmap (auto-updating, monthly) — replaces the sample
 - [ ] **Editorial interstate-tension layer** (your main goal) — heat + arcs you control
 - [ ] **Flat equal-area export** (Equal Earth / Robinson) for article screenshots
 - [ ] More blocs: CSTO, AUKUS, Five Eyes, QUAD, SCO, ASEAN, AU, GCC, Arab League, OAS, Mercosur, OPEC+, RCEP, CPTPP, Commonwealth, EAEU
@@ -98,3 +100,50 @@ proven with real (if partial) data. Filling in the rest is mostly editing data.
 
 If a label font ever fails to appear, change `"Open Sans Regular"` in `app.js`
 to `"Noto Sans Regular"`.
+
+---
+
+## Auto-updating conflict data (how it runs)
+
+The violence heatmap refreshes itself via a free **GitHub Action** — no server.
+
+- `scripts/update_conflict.py` fetches recent UCDP events and writes
+  `data/conflict.geojson`.
+- `.github/workflows/update-conflict.yml` runs it **every Monday** (and on demand)
+  and commits the file if it changed. Each refresh is a dated commit, so you get
+  the conflict map's history for free.
+- The map loads `data/conflict.geojson` if present and falls back to the bundled
+  sample if not.
+
+**To switch it on after uploading:**
+1. In your repo, open the **Actions** tab. If prompted, click to enable workflows.
+2. Open **Update conflict data** → **Run workflow** to do the first run now
+   (instead of waiting for Monday).
+3. When it finishes (green check), it will have committed `data/conflict.geojson`.
+   Refresh the map — the heat layer is now live UCDP data and relabels itself.
+
+If a run fails, open it in the Actions tab and copy the log here — the script is
+written to fail safely (it never overwrites good data), so the map keeps working
+either way.
+
+> Optional later: a free UCDP API token lifts the rate limits for heavier use;
+> add it as a repo secret and we'll wire it in. Not needed for weekly updates.
+
+---
+
+## All three auto-updaters (Actions)
+
+| Workflow | Runs | Writes | Source |
+|---|---|---|---|
+| Update conflict data | weekly (Mon) | `data/conflict.geojson` | UCDP |
+| Update power index | weekly (Mon) | `data/power-index.json` | World Bank |
+| Update news pulse | every 6 hours | `data/newspulse.geojson` | GDELT |
+
+After uploading, switch them on once in the **Actions** tab (see below). Each
+fails safe — if a fetch hiccups, it leaves the last good file in place, so the
+map never breaks. The "Computed power (data)" fill and the "News pulse (GDELT)"
+toggle show bundled placeholders until their first run.
+
+To extend the computed-power coverage to more countries, add rows to
+`NAME_BY_ISO3` in `scripts/update_power.py` (World-Bank iso3 code → the country
+name the map uses).

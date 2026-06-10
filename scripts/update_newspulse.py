@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Fetch GDELT GEO 2.0 news geography -> data/newspulse.geojson."""
+"""
+Fetch the GDELT GEO 2.0 news-mention geography for a geopolitics query and write
+a slim data/newspulse.geojson the map can drop straight onto the globe.
+
+This is *media-attention* geography (where news coverage places a topic), not
+ground truth — useful as a live "pulse", noisy by nature. Updated every few
+hours by a GitHub Action. Fails safe: on trouble it leaves the file untouched.
+"""
 
 import json, os, sys, urllib.parse, urllib.request
 

@@ -134,6 +134,11 @@ html, body {
 }
 .card .value { font-size: 14px; color: var(--parchment); }
 .card .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.card .wb-link {
+  display: inline-block; margin-top: 12px; font-family: "IBM Plex Mono", monospace;
+  font-size: 11px; color: var(--signal); text-decoration: none; border-bottom: 1px solid var(--signal-dim);
+}
+.card .wb-link:hover { color: var(--parchment); }
 .card .chip {
   font-family: "IBM Plex Mono", monospace; font-size: 11px; padding: 2px 8px;
   border-radius: 999px; border: 1px solid var(--hairline); color: var(--parchment);

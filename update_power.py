@@ -1,30 +1,29 @@
 #!/usr/bin/env python3
 """
-Build a CINC-style "computed power" index from free World Bank indicators and
-write data/power-index.json, keyed by the same country names the map uses.
+Pull free World Bank indicators and write data/power-index.json keyed by the
+country names the map uses. For each country we store raw stats plus a CINC-style
+composite (a country's average share of the world total across capability inputs).
 
-CINC = a country's average share of the world total across several capability
-indicators. We approximate the classic six with what the World Bank exposes
-(no API key needed):
-  - military expenditure (MS.MIL.XPND.CD)
-  - armed forces personnel (MS.MIL.TOTL.P1)
-  - total population (SP.POP.TOTL)
-  - urban population (SP.URB.TOTL)
-  - GDP, as a stand-in for industrial output (NY.GDP.MKTP.CD)
+Output shape (per country name):
+  { "iso3": "...", "composite": 0.x,
+    "gdp": ..., "gdppc": ..., "pop": ..., "milex": ..., "milper": ... }
 
-Runs inside a GitHub Action. Fails safe: on any trouble it leaves the existing
-file untouched so the map keeps working.
+No API key needed. Runs in a GitHub Action. Fails safe: on trouble, leaves the
+existing file untouched.
 """
 
-import json, os, sys, urllib.request, urllib.error
+import json, os, sys, urllib.request
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "power-index.json")
 BASE = "https://api.worldbank.org/v2/country/all/indicator/{code}?format=json&per_page=400&mrnev=1"
 UA = {"User-Agent": "geostrat-map/1.0 (GitHub Action)"}
 
-INDICATORS = ["MS.MIL.XPND.CD", "MS.MIL.TOTL.P1", "SP.POP.TOTL", "SP.URB.TOTL", "NY.GDP.MKTP.CD"]
+INDICATORS = {
+    "gdp": "NY.GDP.MKTP.CD", "gdppc": "NY.GDP.PCAP.CD", "pop": "SP.POP.TOTL",
+    "urb": "SP.URB.TOTL", "milex": "MS.MIL.XPND.CD", "milper": "MS.MIL.TOTL.P1",
+}
+COMPOSITE_KEYS = ["milex", "milper", "pop", "urb", "gdp"]
 
-# World Bank iso3 -> the country name the map uses (must match countries.js / map labels).
 NAME_BY_ISO3 = {
     "USA": "United States", "CHN": "China", "RUS": "Russia", "IND": "India",
     "JPN": "Japan", "DEU": "Germany", "GBR": "United Kingdom", "FRA": "France",
@@ -41,7 +40,7 @@ NAME_BY_ISO3 = {
     "HUN": "Hungary", "AUT": "Austria", "CHE": "Switzerland", "BEL": "Belgium",
     "DNK": "Denmark", "FIN": "Finland", "IRL": "Ireland", "NZL": "New Zealand",
     "BLR": "Belarus", "UZB": "Uzbekistan", "AZE": "Azerbaijan", "MMR": "Myanmar",
-    "MAR": "Morocco", "ANG": "Angola", "VEN": "Venezuela", "CUB": "Cuba"
+    "MAR": "Morocco", "AGO": "Angola", "VEN": "Venezuela", "CUB": "Cuba"
 }
 
 
@@ -52,7 +51,7 @@ def get(url):
 
 
 def fetch_indicator(code):
-    """Return (per_iso3_value, world_total) for one indicator."""
+    """Return (per_iso3_value, world_total)."""
     payload = get(BASE.format(code=code))
     rows = payload[1] if isinstance(payload, list) and len(payload) > 1 else []
     vals, world = {}, None
@@ -71,32 +70,43 @@ def fetch_indicator(code):
 
 
 def main():
-    shares = {iso3: [] for iso3 in NAME_BY_ISO3}
+    raw, world = {}, {}
     ok = 0
-    for code in INDICATORS:
+    for key, code in INDICATORS.items():
         try:
-            vals, world = fetch_indicator(code)
+            raw[key], world[key] = fetch_indicator(code)
             ok += 1
-            for iso3, v in vals.items():
-                shares[iso3].append(v / world)
         except Exception as e:
-            print("indicator", code, "failed:", e)
+            print("indicator", key, "failed:", e)
+            raw[key], world[key] = {}, 1.0
     if ok == 0:
         print("All indicator fetches failed — leaving existing file untouched.")
         sys.exit(0)
 
-    index = {}
+    out = {}
     for iso3, name in NAME_BY_ISO3.items():
-        s = shares[iso3]
-        if s:
-            index[name] = round(sum(s) / len(s), 4)
-    if not index:
-        print("No composite values computed — leaving existing file untouched.")
+        shares = []
+        for k in COMPOSITE_KEYS:
+            v = raw.get(k, {}).get(iso3)
+            if v is not None and world.get(k):
+                shares.append(v / world[k])
+        entry = {"iso3": iso3}
+        if shares:
+            entry["composite"] = round(sum(shares) / len(shares), 4)
+        for k in ("gdp", "gdppc", "pop", "milex", "milper"):
+            v = raw.get(k, {}).get(iso3)
+            if v is not None:
+                entry[k] = round(v)
+        if len(entry) > 1:  # has at least one real value beyond iso3
+            out[name] = entry
+
+    if not out:
+        print("No values computed — leaving existing file untouched.")
         sys.exit(0)
 
     with open(OUT, "w") as f:
-        json.dump(index, f, separators=(",", ":"), sort_keys=True)
-    print("Wrote power index for", len(index), "countries from", ok, "indicators")
+        json.dump(out, f, separators=(",", ":"), sort_keys=True)
+    print("Wrote stats for", len(out), "countries from", ok, "indicators")
 
 
 if __name__ == "__main__":

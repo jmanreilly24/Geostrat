@@ -1,90 +1,66 @@
 #!/usr/bin/env python3
 """
-Fetch recent conflict events from the UCDP API and write a slim GeoJSON the map
-can read. Runs inside a GitHub Action on a schedule — you do not run this by hand.
+Download the latest UCDP Candidate Events CSV (a free, static, no-token file) and
+write a slim data/conflict.geojson for the map.
 
-Output: data/conflict.geojson  (a FeatureCollection of points)
-Each point carries: weight (log-scaled deaths, ~1-7), date, country.
+UCDP locked its live API behind tokens in Feb 2026, but the bulk data files on the
+download page remain open (CC BY 4.0). This script reads that page, finds the
+newest Candidate CSV link automatically, downloads it, and converts it.
 
-Design notes:
-- Uses the public UCDP endpoint (no token). It's paged and rate-limited, which
-  is fine for a weekly job. A token can be added later to lift limits.
-- Probes the last several months to find the newest available Candidate version.
-- If anything fails, it exits WITHOUT touching the existing file, so the last
-  good data stays live.
+Fails safe: on any trouble it leaves the existing file untouched.
 """
 
-import json, math, os, sys, datetime, urllib.request, urllib.error
+import csv, io, json, math, os, re, sys, datetime, urllib.request
 
-API = "https://ucdpapi.pcr.uu.se/api/gedevents/{ver}?pagesize=1000&page={page}"
+DOWNLOADS = "https://ucdp.uu.se/downloads/"
+FALLBACK = "https://ucdp.uu.se/downloads/candidateged/GEDEvent_v26_0_4.csv"
+PATTERN = re.compile(r"https://ucdp\.uu\.se/downloads/candidateged/GEDEvent_v[0-9_]+\.csv")
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "conflict.geojson")
 DAYS_BACK = 365
-MAX_PAGES = 150
 UA = {"User-Agent": "geostrat-map/1.0 (GitHub Action)"}
 
 
-def get(url):
+def fetch_text(url):
     req = urllib.request.Request(url, headers=UA)
-    with urllib.request.urlopen(req, timeout=60) as r:
-        return json.loads(r.read().decode("utf-8"))
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return r.read().decode("utf-8-sig", errors="replace")
 
 
-def candidate_versions():
-    """Newest-first list of plausible Candidate version strings, e.g. '26.0.4'."""
-    out, today = [], datetime.date.today()
-    y, m = today.year, today.month
-    for _ in range(8):
-        out.append("{:02d}.0.{}".format(y % 100, m))
-        m -= 1
-        if m == 0:
-            m, y = 12, y - 1
-    return out
-
-
-def find_version():
-    for ver in candidate_versions():
-        try:
-            data = get(API.format(ver=ver, page=1))
-            if isinstance(data, dict) and data.get("Result"):
-                print("Using UCDP version", ver, "TotalCount", data.get("TotalCount"))
-                return ver
-        except urllib.error.HTTPError as e:
-            print("  version", ver, "->", e.code)
-        except Exception as e:
-            print("  version", ver, "->", e)
-    return None
-
-
-def fetch_all(ver):
-    events, page = [], 1
-    while page <= MAX_PAGES:
-        data = get(API.format(ver=ver, page=page))
-        rows = data.get("Result") or []
-        if not rows:
-            break
-        events.extend(rows)
-        total_pages = data.get("TotalPages") or 1
-        if page >= total_pages:
-            break
-        page += 1
-    print("Fetched", len(events), "raw events across", page, "page(s)")
-    return events
+def find_csv_url():
+    try:
+        hits = PATTERN.findall(fetch_text(DOWNLOADS))
+        if hits:
+            return hits[0]   # page lists newest first
+    except Exception as e:
+        print("Could not read download page, using fallback:", e)
+    return FALLBACK
 
 
 def weight(deaths):
-    d = max(0, int(deaths or 0))
+    try:
+        d = max(0, int(float(deaths or 0)))
+    except (TypeError, ValueError):
+        d = 0
     return round(min(10.0, 1.0 + 2.0 * math.log10(d + 1)), 2)
 
 
-def to_geojson(events):
+def main():
+    url = find_csv_url()
+    print("Downloading", url)
+    try:
+        text = fetch_text(url)
+    except Exception as e:
+        print("Download failed — leaving existing file untouched:", e)
+        sys.exit(0)
+
     cutoff = datetime.date.today() - datetime.timedelta(days=DAYS_BACK)
     feats = []
-    for e in events:
+    for row in csv.DictReader(io.StringIO(text)):
         try:
-            lat = float(e.get("latitude")); lng = float(e.get("longitude"))
+            lat = float(row.get("latitude")); lng = float(row.get("longitude"))
         except (TypeError, ValueError):
             continue
-        ds = (e.get("date_start") or "")[:10]
+        ds = (row.get("date_start") or "")[:10]
         try:
             if datetime.date.fromisoformat(ds) < cutoff:
                 continue
@@ -92,29 +68,19 @@ def to_geojson(events):
             pass
         feats.append({
             "type": "Feature",
-            "properties": {
-                "weight": weight(e.get("best")),
-                "date": ds,
-                "country": e.get("country") or ""
-            },
+            "properties": {"weight": weight(row.get("best")),
+                           "date": ds, "country": row.get("country") or ""},
             "geometry": {"type": "Point",
                          "coordinates": [round(lng, 3), round(lat, 3)]}
         })
-    return {"type": "FeatureCollection", "features": feats}
 
-
-def main():
-    ver = find_version()
-    if not ver:
-        print("No UCDP version found — leaving existing file untouched.")
-        sys.exit(0)
-    fc = to_geojson(fetch_all(ver))
-    if not fc["features"]:
+    if not feats:
         print("No recent events parsed — leaving existing file untouched.")
         sys.exit(0)
+
     with open(OUT, "w") as f:
-        json.dump(fc, f, separators=(",", ":"))
-    print("Wrote", len(fc["features"]), "features to data/conflict.geojson")
+        json.dump({"type": "FeatureCollection", "features": feats}, f, separators=(",", ":"))
+    print("Wrote", len(feats), "features to data/conflict.geojson")
 
 
 if __name__ == "__main__":
