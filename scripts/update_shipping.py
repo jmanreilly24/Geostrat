@@ -1,20 +1,13 @@
 #!/usr/bin/env python3
-"""
-Fetch recent chokepoint transit counts from IMF PortWatch (free ArcGIS feature
-service, updated weekly on Tuesdays) and write data/portwatch.json:
-one point per chokepoint with its latest 7-day average daily transit calls.
+"""Fetch IMF PortWatch chokepoint transits -> data/portwatch.json. Fails safe."""
 
-Fails safe: on any trouble it leaves the existing file untouched.
-"""
-
-import json, os, sys, datetime, urllib.parse, urllib.request
+import json, os, sys, urllib.parse, urllib.request
 from collections import defaultdict
 
 SERVICE = ("https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/"
            "Daily_Chokepoints_Data/FeatureServer/0/query")
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "portwatch.json")
 UA = {"User-Agent": "geostrat-map/1.0 (GitHub Action)"}
-DAYS_BACK = 35
 
 
 def get(url):
@@ -24,28 +17,29 @@ def get(url):
 
 
 def main():
-    since = (datetime.date.today() - datetime.timedelta(days=DAYS_BACK)).isoformat()
-   params = {
+    params = {
         "where": "1=1",
         "orderByFields": "date DESC",
         "outFields": "portid,portname,date,vessel_count_total",
-        "outSR": "4326", "f": "json", "returnGeometry": "true",
+        "outSR": "4326",
+        "f": "json",
+        "returnGeometry": "true",
         "resultRecordCount": "1000",
     }
     url = SERVICE + "?" + urllib.parse.urlencode(params)
     try:
         data = get(url)
     except Exception as e:
-        print("PortWatch fetch failed — leaving existing file untouched:", e)
+        print("PortWatch fetch failed - leaving existing file untouched:", e)
         sys.exit(0)
 
     feats = data.get("features") or []
     if not feats:
-        print("No PortWatch rows returned — leaving existing file untouched.")
+        print("No PortWatch rows returned - leaving existing file untouched.")
         print("Server said:", json.dumps(data)[:400])
         sys.exit(0)
 
-    by_port = defaultdict(list)  # name -> list of (date_ms, count, x, y)
+    by_port = defaultdict(list)
     for f in feats:
         a = f.get("attributes") or {}
         g = f.get("geometry") or {}
@@ -70,7 +64,7 @@ def main():
         })
 
     if not out:
-        print("Nothing aggregated — leaving existing file untouched.")
+        print("Nothing aggregated - leaving existing file untouched.")
         sys.exit(0)
 
     with open(OUT, "w") as f:
