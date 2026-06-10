@@ -26,7 +26,13 @@
   var byId = function (id) { return document.getElementById(id); };
 
   var COUNTRIES_GEO = null;   // decorated polygons, kept so live data can update them
-  var POWER_BY_NAME = {};     // World Bank power composite, keyed by country name
+  var COUNTRY_POINTS_GEO = null; // one point per country for proportional-symbol stats
+  var POWER_BY_NAME = {};     // World Bank stats + composite, keyed by country name
+  function powerOf(name) {
+    var v = POWER_BY_NAME[name];
+    if (typeof v === "number") return { composite: v };  // tolerate old file shape
+    return v || {};
+  }
 
   /* ---- name join: map your readable names <-> world-map names ----------- */
   var nameIndex = {};
@@ -156,7 +162,7 @@
 
   /* ---- state ------------------------------------------------------------ */
   var state = {
-    hillshade: true, fill: "tier",
+    hillshade: true, fill: "tier", stat: "none",
     nato: false, brics: false, eu: false,
     heat: true, heartland: false, chokepoints: true,
     newspulse: false
@@ -217,11 +223,38 @@
       f.properties.nato = !!(key && nato[key]);
       f.properties.brics = !!(key && brics[key]);
       f.properties.eu = !!(key && eu[key]);
-      f.properties.composite = POWER_BY_NAME[f.properties.cname] || 0;
+      f.properties.composite = powerOf(f.properties.cname).composite || 0;
     });
   }
 
   function fc(features) { return { type: "FeatureCollection", features: features }; }
+
+  function centroid(geom) {
+    var polys = geom && geom.type === "Polygon" ? [geom.coordinates]
+              : geom && geom.type === "MultiPolygon" ? geom.coordinates : [];
+    var best = null, bestN = 0;
+    polys.forEach(function (rings) {
+      var ring = rings[0];
+      if (ring && ring.length > bestN) { bestN = ring.length; best = ring; }
+    });
+    if (!best) return null;
+    var sx = 0, sy = 0;
+    best.forEach(function (p) { sx += p[0]; sy += p[1]; });
+    return [sx / best.length, sy / best.length];
+  }
+  function buildCountryPoints(geo) {
+    var feats = [];
+    geo.features.forEach(function (f) {
+      var c = centroid(f.geometry);
+      if (!c) return;
+      var st = powerOf(f.properties.cname);
+      feats.push({ type: "Feature",
+        properties: { cname: f.properties.cname, pop: st.pop || 0, gdp: st.gdp || 0,
+          gdppc: st.gdppc || 0, milex: st.milex || 0, milper: st.milper || 0, r: 0 },
+        geometry: { type: "Point", coordinates: c } });
+    });
+    return fc(feats);
+  }
 
   function addLayers(geo) {
     map.addSource("countries", { type: "geojson", data: geo });
@@ -235,6 +268,8 @@
       }))
     });
     map.addSource("newspulse", { type: "geojson", data: window.NEWSPULSE || fc([]) });
+    COUNTRY_POINTS_GEO = buildCountryPoints(geo);
+    map.addSource("country-points", { type: "geojson", data: COUNTRY_POINTS_GEO });
 
     // power-tier fill
     map.addLayer({ id: "fill-tier", type: "fill", source: "countries",
@@ -282,13 +317,23 @@
     map.addLayer({ id: "conflict-heat", type: "heatmap", source: "conflict",
       paint: {
         "heatmap-weight": ["interpolate", ["linear"], ["get", "weight"], 0, 0, 10, 1],
-        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 1, 6, 3],
-        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 20, 3, 40, 6, 64],
+        "heatmap-intensity": ["interpolate", ["linear"], ["zoom"], 0, 0.5, 6, 1.4],
+        "heatmap-radius": ["interpolate", ["linear"], ["zoom"], 0, 10, 3, 20, 6, 36],
         "heatmap-color": ["interpolate", ["linear"], ["heatmap-density"],
-          0, "rgba(11,16,32,0)", 0.15, "#7d3b1f", 0.35, "#c25a22",
-          0.6, "#ff8a3d", 0.85, "#ff4d2e", 1, "#ffd08a"],
-        "heatmap-opacity": 0.82
+          0, "rgba(0,0,0,0)",
+          0.2, "rgba(180,70,30,0.30)",
+          0.45, "rgba(225,100,40,0.42)",
+          0.7, "rgba(255,125,50,0.50)",
+          1, "rgba(255,170,80,0.60)"],
+        "heatmap-opacity": 0.7
       }, layout: { visibility: "visible" } });
+
+    // proportional statistic circles (World Bank), one metric at a time
+    map.addLayer({ id: "stat-circles", type: "circle", source: "country-points",
+      paint: { "circle-radius": ["get", "r"],
+        "circle-color": "#E8A33D", "circle-opacity": 0.18,
+        "circle-stroke-color": "#F0B450", "circle-stroke-width": 1, "circle-stroke-opacity": 0.75 },
+      layout: { visibility: "none" } });
 
     // chokepoints
     map.addLayer({ id: "chokepoint-dot", type: "circle", source: "chokepoints",
@@ -344,16 +389,45 @@
   function refreshPower() {
     fetch("data/power-index.json", { cache: "no-store" })
       .then(function (r) { if (r.ok) return r.json(); throw new Error("no file"); })
-      .then(function (d) { if (d && typeof d === "object") { POWER_BY_NAME = d; applyComposite(); } })
+      .then(function (d) { if (d && typeof d === "object") { POWER_BY_NAME = d; applyComposite(); rebuildStats(); } })
       .catch(function () { /* keep the bundled sample */ });
   }
   function applyComposite() {
     if (!COUNTRIES_GEO) return;
     COUNTRIES_GEO.features.forEach(function (f) {
-      f.properties.composite = POWER_BY_NAME[f.properties.cname] || 0;
+      f.properties.composite = powerOf(f.properties.cname).composite || 0;
     });
     var s = map.getSource("countries");
     if (s) s.setData(COUNTRIES_GEO);
+  }
+
+  function statMax(metric) {
+    var max = 0;
+    COUNTRY_POINTS_GEO.features.forEach(function (f) { var v = f.properties[metric] || 0; if (v > max) max = v; });
+    return max;
+  }
+  function switchStat(metric) {
+    state.stat = metric;
+    if (metric === "none") { setVis("stat-circles", false); tele(); return; }
+    var max = statMax(metric);
+    COUNTRY_POINTS_GEO.features.forEach(function (f) {
+      var v = f.properties[metric] || 0;
+      f.properties.r = (v > 0 && max > 0) ? Math.sqrt(v / max) * 30 + 2 : 0;
+    });
+    var s = map.getSource("country-points"); if (s) s.setData(COUNTRY_POINTS_GEO);
+    setVis("stat-circles", true);
+    tele();
+  }
+  function rebuildStats() {
+    if (!COUNTRY_POINTS_GEO) return;
+    COUNTRY_POINTS_GEO.features.forEach(function (f) {
+      var st = powerOf(f.properties.cname);
+      f.properties.pop = st.pop || 0; f.properties.gdp = st.gdp || 0;
+      f.properties.gdppc = st.gdppc || 0; f.properties.milex = st.milex || 0;
+      f.properties.milper = st.milper || 0;
+    });
+    if (state.stat !== "none") switchStat(state.stat);
+    else { var s = map.getSource("country-points"); if (s) s.setData(COUNTRY_POINTS_GEO); }
   }
 
   /* load the live GDELT news-pulse file (written every few hours by the Action). */
@@ -388,6 +462,14 @@
       row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp") +
       '<div class="legend" id="legend"></div>' +
 
+      "<h2>Country statistics — choose one</h2>" +
+      '<p class="hint">Sized circles, World Bank latest. Combine with any fill.</p>' +
+      row("rad", "stat-none", "None", state.stat === "none", "statgrp") +
+      row("rad", "stat-pop", "Population", state.stat === "pop", "statgrp") +
+      row("rad", "stat-gdp", "GDP", state.stat === "gdp", "statgrp") +
+      row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp") +
+      row("rad", "stat-milex", "Military spending", state.stat === "milex", "statgrp") +
+
       "<h2>Alliances &amp; blocs — stack</h2>" +
       BLOCS.map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("") +
 
@@ -408,6 +490,9 @@
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
     ["none", "tier", "role", "power"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
+    });
+    ["none", "pop", "gdp", "gdppc", "milex"].forEach(function (m) {
+      byId("cb-stat-" + m).onchange = function (e) { if (e.target.checked) switchStat(m); };
     });
     BLOCS.forEach(function (b) {
       byId("cb-" + b.key).onchange = function (e) { state[b.key] = e.target.checked; setVis("bloc-" + b.key, state[b.key]); tele(); };
@@ -450,7 +535,7 @@
     var n = (state.fill !== "none" ? 1 : 0) + (state.hillshade ? 1 : 0) +
             (state.nato ? 1 : 0) + (state.brics ? 1 : 0) + (state.eu ? 1 : 0) +
             (state.heat ? 1 : 0) + (state.heartland ? 1 : 0) + (state.chokepoints ? 1 : 0) +
-            (state.newspulse ? 1 : 0);
+            (state.newspulse ? 1 : 0) + (state.stat !== "none" ? 1 : 0);
     byId("t-layers").textContent = n;
   }
   map.on("move", tele);
@@ -478,6 +563,20 @@
     });
   }
 
+  function fmtUSD(v) {
+    if (!v) return "—";
+    if (v >= 1e12) return "$" + (v / 1e12).toFixed(2) + "T";
+    if (v >= 1e9) return "$" + (v / 1e9).toFixed(1) + "B";
+    if (v >= 1e6) return "$" + (v / 1e6).toFixed(1) + "M";
+    return "$" + Math.round(v);
+  }
+  function fmtNum(v) {
+    if (!v) return "—";
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
+    if (v >= 1e6) return (v / 1e6).toFixed(1) + "M";
+    if (v >= 1e3) return (v / 1e3).toFixed(0) + "k";
+    return String(Math.round(v));
+  }
   function showCard(p) {
     byId("card-name").textContent = p.cname;
     byId("card-tier").textContent = TIER_LABEL[p.tier] || p.tier;
@@ -485,6 +584,17 @@
     var chips = [];
     BLOCS.forEach(function (b) { if (p[b.key]) chips.push('<span class="chip">' + b.label + "</span>"); });
     byId("card-blocs").innerHTML = chips.length ? chips.join("") : '<span class="value">—</span>';
+
+    var st = powerOf(p.cname);
+    var hasStats = st.gdp || st.pop || st.milex;
+    byId("card-stats").innerHTML = hasStats
+      ? "GDP " + fmtUSD(st.gdp) + " &middot; Pop " + fmtNum(st.pop) +
+        "<br>Per cap " + fmtUSD(st.gdppc) + " &middot; Mil " + fmtUSD(st.milex)
+      : "—";
+    var wb = byId("card-wb");
+    if (st.iso3) { wb.href = "https://data.worldbank.org/country/" + st.iso3; wb.style.display = "inline-block"; }
+    else { wb.style.display = "none"; }
+
     byId("card").classList.add("show");
   }
 })();
