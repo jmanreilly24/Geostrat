@@ -1,20 +1,5 @@
 #!/usr/bin/env python3
-"""
-Build a CINC-style "computed power" index from free World Bank indicators and
-write data/power-index.json, keyed by the same country names the map uses.
-
-CINC = a country's average share of the world total across several capability
-indicators. We approximate the classic six with what the World Bank exposes
-(no API key needed):
-  - military expenditure (MS.MIL.XPND.CD)
-  - armed forces personnel (MS.MIL.TOTL.P1)
-  - total population (SP.POP.TOTL)
-  - urban population (SP.URB.TOTL)
-  - GDP, as a stand-in for industrial output (NY.GDP.MKTP.CD)
-
-Runs inside a GitHub Action. Fails safe: on any trouble it leaves the existing
-file untouched so the map keeps working.
-"""
+"""Build a CINC-style power index from World Bank indicators -> data/power-index.json."""
 
 import json, os, sys, urllib.request, urllib.error
 
@@ -24,7 +9,6 @@ UA = {"User-Agent": "geostrat-map/1.0 (GitHub Action)"}
 
 INDICATORS = ["MS.MIL.XPND.CD", "MS.MIL.TOTL.P1", "SP.POP.TOTL", "SP.URB.TOTL", "NY.GDP.MKTP.CD"]
 
-# World Bank iso3 -> the country name the map uses (must match countries.js / map labels).
 NAME_BY_ISO3 = {
     "USA": "United States", "CHN": "China", "RUS": "Russia", "IND": "India",
     "JPN": "Japan", "DEU": "Germany", "GBR": "United Kingdom", "FRA": "France",
@@ -41,7 +25,7 @@ NAME_BY_ISO3 = {
     "HUN": "Hungary", "AUT": "Austria", "CHE": "Switzerland", "BEL": "Belgium",
     "DNK": "Denmark", "FIN": "Finland", "IRL": "Ireland", "NZL": "New Zealand",
     "BLR": "Belarus", "UZB": "Uzbekistan", "AZE": "Azerbaijan", "MMR": "Myanmar",
-    "MAR": "Morocco", "ANG": "Angola", "VEN": "Venezuela", "CUB": "Cuba"
+    "MAR": "Morocco", "AGO": "Angola", "VEN": "Venezuela", "CUB": "Cuba"
 }
 
 
@@ -52,7 +36,6 @@ def get(url):
 
 
 def fetch_indicator(code):
-    """Return (per_iso3_value, world_total) for one indicator."""
     payload = get(BASE.format(code=code))
     rows = payload[1] if isinstance(payload, list) and len(payload) > 1 else []
     vals, world = {}, None
