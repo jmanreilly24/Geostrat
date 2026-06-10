@@ -1,16 +1,9 @@
 /* ============================================================================
-   COUNTRY DATA  —  edit this file to change classifications and bloc membership
-   ----------------------------------------------------------------------------
-   You do NOT need to touch any code to update the map. Everything visual is
-   driven by the lists below. To find the EXACT name to use for a country,
-   click it on the map: the info card shows the name string the map expects.
-
-   Power tiers (pick one per country): hegemon | great | regional | middle | small
-   Brzezinski roles: "agent" (active geostrategic player) or "pivot"
+   COUNTRY DATA — edit this file to change classifications and memberships.
+   Click any country on the map to see the exact name string to use here.
    ========================================================================== */
 
-/* ---- POWER TIER -------------------------------------------------------------
-   Editorial starting point. Reassign freely — this is your call to make.      */
+/* ---- POWER TIER (editorial) -------------------------------------------- */
 window.COUNTRY_TIERS = {
   "United States": "hegemon",
   "China": "hegemon",
@@ -30,27 +23,19 @@ window.COUNTRY_TIERS = {
   "Mexico": "middle", "Netherlands": "middle", "Sweden": "middle",
   "Norway": "middle", "Qatar": "middle", "Kazakhstan": "middle",
   "Ethiopia": "middle", "Philippines": "middle", "Thailand": "middle"
-  // everything not listed renders as "small / unclassified" — add rows as you go
 };
 
-/* ---- BRZEZINSKI: GEOSTRATEGIC PLAYERS vs GEOPOLITICAL PIVOTS -----------------
-   From Z. Brzezinski, "The Grand Chessboard" (1997). The classic five active
-   geostrategic players in Eurasia, and the five geopolitical pivots.
-   The United States sits outside this scheme as the external balancer.        */
+/* ---- BRZEZINSKI ROLES ---------------------------------------------------- */
 window.COUNTRY_ROLES = {
-  // agents (active geostrategic players)
   "France": "agent", "Germany": "agent", "Russia": "agent",
   "China": "agent", "India": "agent",
-  // pivots (geopolitical pivots)
   "Ukraine": "pivot", "Azerbaijan": "pivot", "South Korea": "pivot",
   "Turkey": "pivot", "Iran": "pivot"
 };
 
-/* ---- BLOC / ALLIANCE MEMBERSHIP ---------------------------------------------
-   Each list is rendered as its own outline layer you can stack. Add lists here
-   and a matching entry in app.js BLOC_LAYERS to make a new bloc appear.        */
+/* ---- BLOC / ALLIANCE MEMBERSHIP ------------------------------------------
+   Each list renders as a stackable outline layer (colors set in app.js).    */
 window.MEMBERSHIPS = {
-  // NATO — 32 members (Finland 2023, Sweden 2024)
   nato: [
     "Albania","Belgium","Bulgaria","Canada","Croatia","Czechia","Denmark",
     "Estonia","Finland","France","Germany","Greece","Hungary","Iceland","Italy",
@@ -58,42 +43,125 @@ window.MEMBERSHIPS = {
     "Norway","Poland","Portugal","Romania","Slovakia","Slovenia","Spain","Sweden",
     "Turkey","United Kingdom","United States"
   ],
-
-  // BRICS — 11 full members as of 2026 (Saudi Arabia's status is contested —
-  // invited 2023, listed as a member by India's 2026 chairship but never
-  // formally confirmed accession; included here, flag if you'd rather exclude)
-  brics: [
-    "Brazil","Russia","India","China","South Africa",
-    "Egypt","Ethiopia","Iran","United Arab Emirates","Indonesia","Saudi Arabia"
+  csto: ["Russia","Belarus","Kazakhstan","Kyrgyzstan","Tajikistan","Armenia"],
+  sco: [ // Shanghai Cooperation Organisation (security + economic)
+    "China","Russia","India","Pakistan","Kazakhstan","Kyrgyzstan","Tajikistan",
+    "Uzbekistan","Iran","Belarus"
   ],
+  aukus: ["Australia","United Kingdom","United States"],
+  fiveEyes: ["United States","United Kingdom","Canada","Australia","New Zealand"],
+  quad: ["United States","Japan","India","Australia"], // dialogue, not a treaty
 
-  // BRICS partner countries (2025 cohort)
-  bricsPartners: [
-    "Belarus","Bolivia","Cuba","Kazakhstan","Malaysia","Nigeria","Thailand",
-    "Uganda","Uzbekistan","Vietnam"
-  ],
-
-  // EU — 27 members
   eu: [
     "Austria","Belgium","Bulgaria","Croatia","Cyprus","Czechia","Denmark",
     "Estonia","Finland","France","Germany","Greece","Hungary","Ireland","Italy",
     "Latvia","Lithuania","Luxembourg","Malta","Netherlands","Poland","Portugal",
     "Romania","Slovakia","Slovenia","Spain","Sweden"
-  ]
+  ],
+  brics: [
+    "Brazil","Russia","India","China","South Africa","Egypt","Ethiopia","Iran",
+    "United Arab Emirates","Indonesia","Saudi Arabia" // Saudi status contested
+  ],
+  bricsPartners: [
+    "Belarus","Bolivia","Cuba","Kazakhstan","Malaysia","Nigeria","Thailand",
+    "Uganda","Uzbekistan","Vietnam"
+  ],
+  eaeu: ["Russia","Belarus","Kazakhstan","Kyrgyzstan","Armenia"],
+  asean: [
+    "Brunei","Cambodia","Indonesia","Laos","Malaysia","Myanmar","Philippines",
+    "Singapore","Thailand","Vietnam","Timor-Leste" // joined 2025
+  ],
+  gcc: ["Saudi Arabia","United Arab Emirates","Kuwait","Qatar","Bahrain","Oman"],
+  arabLeague: [
+    "Algeria","Bahrain","Djibouti","Egypt","Iraq","Jordan","Kuwait","Lebanon",
+    "Libya","Mauritania","Morocco","Oman","Palestine","Qatar","Saudi Arabia",
+    "Somalia","Sudan","Syria","Tunisia","United Arab Emirates","Yemen"
+  ],
+  au: [ // African Union (W. Sahara polygon stands in for SADR membership)
+    "Algeria","Angola","Benin","Botswana","Burkina Faso","Burundi","Cameroon",
+    "Central African Rep.","Chad","Congo","Côte d'Ivoire","Dem. Rep. Congo",
+    "Djibouti","Egypt","Eq. Guinea","Eritrea","eSwatini","Ethiopia","Gabon",
+    "Gambia","Ghana","Guinea","Guinea-Bissau","Kenya","Lesotho","Liberia","Libya",
+    "Madagascar","Malawi","Mali","Mauritania","Morocco","Mozambique","Namibia",
+    "Niger","Nigeria","Rwanda","Senegal","Sierra Leone","Somalia","South Africa",
+    "S. Sudan","Sudan","Tanzania","Togo","Tunisia","Uganda","W. Sahara",
+    "Zambia","Zimbabwe"
+  ],
+  opecPlus: [
+    "Saudi Arabia","Iraq","Iran","United Arab Emirates","Kuwait","Venezuela",
+    "Nigeria","Libya","Algeria","Congo","Eq. Guinea","Gabon",
+    "Russia","Kazakhstan","Azerbaijan","Bahrain","Brunei","Malaysia","Mexico",
+    "Oman","S. Sudan","Sudan"
+  ],
+  mercosur: ["Brazil","Argentina","Uruguay","Paraguay","Bolivia"]
 };
 
-/* ---- NAME ALIASES -----------------------------------------------------------
-   Maps your readable names to the spellings used by the world map data, so the
-   join works. Add an alias here if a country won't colour (click it to see the
-   exact map name, then add that string to the list).                          */
+/* ---- SPYKMAN RIMLAND (editorial — refine freely) ------------------------- */
+window.RIMLAND = [
+  "Norway","Sweden","Finland","Denmark","Germany","Netherlands","Belgium",
+  "France","Spain","Portugal","Italy","Greece","Turkey","Syria","Lebanon",
+  "Israel","Jordan","Iraq","Saudi Arabia","Yemen","Oman","United Arab Emirates",
+  "Qatar","Kuwait","Bahrain","Iran","Afghanistan","Pakistan","India",
+  "Bangladesh","Myanmar","Thailand","Malaysia","Cambodia","Vietnam",
+  "China","South Korea","North Korea"
+  // Spykman's offshore islands (UK, Japan, etc.) intentionally excluded
+];
+
+/* ---- NUCLEAR WEAPONS STATES ---------------------------------------------- */
+window.NUCLEAR = [
+  "United States","Russia","China","France","United Kingdom",
+  "India","Pakistan","Israel","North Korea" // Israel: undeclared
+];
+
+/* ---- ALLY DERIVATION (used by "Ally highlight on click") ------------------
+   Allies = everyone sharing a bloc listed here, plus bilateral pairs below.  */
+window.ALLIANCE_CONFIG = {
+  military: ["nato","csto","aukus","fiveEyes","quad"],
+  economic: ["eu","eaeu","asean","gcc","mercosur","brics"]
+};
+window.BILATERAL_PACTS = {
+  military: [
+    ["United States","Japan"], ["United States","South Korea"],
+    ["United States","Philippines"], ["United States","Thailand"],
+    ["United States","Israel"],
+    ["Russia","North Korea"], ["China","North Korea"]
+  ],
+  economic: []
+};
+
+/* ---- NAME ALIASES (map-data spelling -> your spelling) -------------------- */
 window.NAME_ALIASES = {
-  "United States": ["United States of America", "USA", "US"],
+  "United States": ["United States of America","USA","US"],
   "Russia": ["Russian Federation"],
-  "Czechia": ["Czech Republic", "Czech Rep."],
+  "Czechia": ["Czech Republic","Czech Rep."],
   "North Macedonia": ["Macedonia"],
-  "Turkey": ["Turkiye", "Türkiye"],
-  "South Korea": ["Korea, Republic of", "Republic of Korea", "Korea"],
+  "Turkey": ["Turkiye","Türkiye"],
+  "South Korea": ["Korea, Republic of","Republic of Korea","Korea"],
+  "North Korea": ["Dem. Rep. Korea","Korea, Dem. People's Rep.","DPRK"],
   "United Arab Emirates": ["UAE"],
   "Bolivia": ["Plurinational State of Bolivia"],
-  "Iran": ["Islamic Republic of Iran"]
+  "Iran": ["Islamic Republic of Iran"],
+  "Vietnam": ["Viet Nam"],
+  "Laos": ["Lao PDR"],
+  "Myanmar": ["Burma"],
+  "Brunei": ["Brunei Darussalam"],
+  "Timor-Leste": ["East Timor"],
+  "Syria": ["Syrian Arab Republic"],
+  "Moldova": ["Republic of Moldova"],
+  "Tanzania": ["United Republic of Tanzania"],
+  "Venezuela": ["Bolivarian Republic of Venezuela"],
+  "Kyrgyzstan": ["Kyrgyz Republic"],
+  "Slovakia": ["Slovak Republic"],
+  "Côte d'Ivoire": ["Ivory Coast","Cote d'Ivoire"],
+  "Dem. Rep. Congo": ["Democratic Republic of the Congo","DR Congo","DRC"],
+  "Congo": ["Republic of the Congo","Congo-Brazzaville"],
+  "Central African Rep.": ["Central African Republic"],
+  "S. Sudan": ["South Sudan"],
+  "Eq. Guinea": ["Equatorial Guinea"],
+  "W. Sahara": ["Western Sahara"],
+  "Bosnia and Herz.": ["Bosnia and Herzegovina"],
+  "Dominican Rep.": ["Dominican Republic"],
+  "Solomon Is.": ["Solomon Islands"],
+  "eSwatini": ["Swaziland","Eswatini"],
+  "Palestine": ["West Bank","Palestinian Territories"]
 };

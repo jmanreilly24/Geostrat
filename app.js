@@ -18,9 +18,23 @@
   };
   var ROLE_LABEL = { agent: "Geostrategic player (agent)", pivot: "Geopolitical pivot", "": "—" };
   var BLOCS = [
-    { key: "nato", label: "NATO", color: "#4DA3FF" },
-    { key: "brics", label: "BRICS", color: "#FF6B6B" },
-    { key: "eu", label: "European Union", color: "#B57EDC" }
+    // defense & security
+    { key: "nato", label: "NATO", color: "#4DA3FF", group: "def" },
+    { key: "csto", label: "CSTO", color: "#E84393", group: "def" },
+    { key: "sco", label: "SCO", color: "#FF9F43", group: "def" },
+    { key: "aukus", label: "AUKUS", color: "#00CEC9", group: "def" },
+    { key: "fiveEyes", label: "Five Eyes", color: "#A29BFE", group: "def" },
+    { key: "quad", label: "QUAD (dialogue)", color: "#2ECC71", group: "def" },
+    // economic & political
+    { key: "eu", label: "European Union", color: "#B57EDC", group: "eco" },
+    { key: "brics", label: "BRICS", color: "#FF6B6B", group: "eco" },
+    { key: "eaeu", label: "EAEU", color: "#B33939", group: "eco" },
+    { key: "asean", label: "ASEAN", color: "#F5D547", group: "eco" },
+    { key: "gcc", label: "GCC", color: "#16A085", group: "eco" },
+    { key: "arabLeague", label: "Arab League", color: "#A3CB38", group: "eco" },
+    { key: "au", label: "African Union", color: "#D4915D", group: "eco" },
+    { key: "opecPlus", label: "OPEC+", color: "#E1B12C", group: "eco" },
+    { key: "mercosur", label: "Mercosur", color: "#74B9FF", group: "eco" }
   ];
 
   var byId = function (id) { return document.getElementById(id); };
@@ -163,10 +177,11 @@
   /* ---- state ------------------------------------------------------------ */
   var state = {
     hillshade: true, fill: "tier", stat: "none",
-    nato: false, brics: false, eu: false,
-    heat: true, heartland: false, chokepoints: true,
-    newspulse: false
+    heat: true, heartland: false, rimland: false, nuclear: false,
+    chokepoints: true, newspulse: false, lanes: false, portwatch: false,
+    allymode: false
   };
+  BLOCS.forEach(function (b) { state[b.key] = false; });
 
   function setVis(id, on) {
     if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
@@ -198,6 +213,7 @@
         refreshConflict();
         refreshPower();
         refreshNewspulse();
+        refreshPortwatch();
         buildRail();
         wireInteraction();
         byId("overlay").classList.add("hide");
@@ -211,8 +227,11 @@
 
   /* attach classifications to each country polygon */
   function inSet(b) { var s = {}; (window.MEMBERSHIPS[b] || []).forEach(function (k) { s[k] = 1; }); return s; }
+  function listSet(arr) { var s = {}; (arr || []).forEach(function (k) { s[k] = 1; }); return s; }
   function decorate(geo) {
-    var nato = inSet("nato"), brics = inSet("brics"), eu = inSet("eu");
+    var blocSets = {};
+    BLOCS.forEach(function (b) { blocSets[b.key] = inSet(b.key); });
+    var rim = listSet(window.RIMLAND), nuc = listSet(window.NUCLEAR);
     geo.features.forEach(function (f) {
       var raw = f.properties && f.properties.name;
       var key = canonical(raw);
@@ -220,9 +239,9 @@
       f.properties.cname = key || raw || "Unknown";
       f.properties.tier = (key && window.COUNTRY_TIERS[key]) || "unclassified";
       f.properties.role = (key && window.COUNTRY_ROLES[key]) || "";
-      f.properties.nato = !!(key && nato[key]);
-      f.properties.brics = !!(key && brics[key]);
-      f.properties.eu = !!(key && eu[key]);
+      BLOCS.forEach(function (b) { f.properties[b.key] = !!(key && blocSets[b.key][key]); });
+      f.properties.rimland = !!(key && rim[key]);
+      f.properties.nuclear = !!(key && nuc[key]);
       f.properties.composite = powerOf(f.properties.cname).composite || 0;
     });
   }
@@ -268,6 +287,11 @@
       }))
     });
     map.addSource("newspulse", { type: "geojson", data: window.NEWSPULSE || fc([]) });
+    map.addSource("lanes", { type: "geojson", data: fc((window.SHIPPING_LANES || []).map(function (r) {
+      return { type: "Feature", properties: { name: r.name, w: r.w },
+               geometry: { type: "MultiLineString", coordinates: r.segments } };
+    })) });
+    map.addSource("portwatch", { type: "geojson", data: fc([]) });
     COUNTRY_POINTS_GEO = buildCountryPoints(geo);
     map.addSource("country-points", { type: "geojson", data: COUNTRY_POINTS_GEO });
 
@@ -313,6 +337,54 @@
       paint: { "line-color": "#E8A33D", "line-width": 1.4, "line-dasharray": [2, 2], "line-opacity": 0.7 },
       layout: { visibility: "none" } });
 
+    // Spykman Rimland — tan country fill (stackable highlight)
+    map.addLayer({ id: "rimland-fill", type: "fill", source: "countries",
+      filter: ["==", ["get", "rimland"], true],
+      paint: { "fill-color": "#C8B08A", "fill-opacity": 0.38 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "rimland-line", type: "line", source: "countries",
+      filter: ["==", ["get", "rimland"], true],
+      paint: { "line-color": "#C8B08A", "line-width": 1, "line-opacity": 0.6 },
+      layout: { visibility: "none" } });
+
+    // Nuclear weapons states — green diagonal hatch
+    (function () {
+      var cv = document.createElement("canvas"); cv.width = 8; cv.height = 8;
+      var ctx = cv.getContext("2d");
+      ctx.strokeStyle = "#3FE08A"; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-2, 10); ctx.lineTo(10, -2);
+      ctx.moveTo(-6, 6); ctx.lineTo(6, -6);
+      ctx.moveTo(2, 14); ctx.lineTo(14, 2);
+      ctx.stroke();
+      if (!map.hasImage("nuclear-hatch")) map.addImage("nuclear-hatch", ctx.getImageData(0, 0, 8, 8));
+    })();
+    map.addLayer({ id: "nuclear-fill", type: "fill", source: "countries",
+      filter: ["==", ["get", "nuclear"], true],
+      paint: { "fill-pattern": "nuclear-hatch", "fill-opacity": 0.65 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "nuclear-line", type: "line", source: "countries",
+      filter: ["==", ["get", "nuclear"], true],
+      paint: { "line-color": "#3FE08A", "line-width": 1.2, "line-opacity": 0.7 },
+      layout: { visibility: "none" } });
+
+    // Shipping lanes — static arteries with a soft glow
+    map.addLayer({ id: "lanes-glow", type: "line", source: "lanes",
+      paint: { "line-color": "#49C5B6", "line-opacity": 0.12,
+        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 3, 10, 10] },
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
+    map.addLayer({ id: "lanes-core", type: "line", source: "lanes",
+      paint: { "line-color": "#49C5B6", "line-opacity": 0.45,
+        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 1, 10, 3.2] },
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
+
+    // PortWatch — live chokepoint traffic rings
+    map.addLayer({ id: "portwatch-ring", type: "circle", source: "portwatch",
+      paint: { "circle-radius": ["interpolate", ["linear"], ["get", "calls"], 0, 3, 30, 8, 80, 13, 200, 20],
+        "circle-color": "#49C5B6", "circle-opacity": 0.15,
+        "circle-stroke-color": "#6FE3D4", "circle-stroke-width": 1.6, "circle-stroke-opacity": 0.9 },
+      layout: { visibility: "none" } });
+
     // conflict heatmap
     map.addLayer({ id: "conflict-heat", type: "heatmap", source: "conflict",
       paint: {
@@ -352,6 +424,17 @@
         "circle-color": "#5BC8FF", "circle-opacity": 0.45,
         "circle-stroke-color": "#0B1020", "circle-stroke-width": 0.5 },
       layout: { visibility: "none" } });
+
+    // ally highlight (filters set on click when ally mode is on)
+    map.addLayer({ id: "ally-mil", type: "fill", source: "countries",
+      filter: ["==", ["get", "cname"], "___none___"],
+      paint: { "fill-color": "#4DA3FF", "fill-opacity": 0.32 } });
+    map.addLayer({ id: "ally-econ", type: "fill", source: "countries",
+      filter: ["==", ["get", "cname"], "___none___"],
+      paint: { "fill-color": "#2ECC71", "fill-opacity": 0.26 } });
+    map.addLayer({ id: "ally-self", type: "line", source: "countries",
+      filter: ["==", ["get", "cname"], "___none___"],
+      paint: { "line-color": "#FFD633", "line-width": 2.5 } });
 
     // transparent always-on hit layer for clicks
     map.addLayer({ id: "countries-hit", type: "fill", source: "countries",
@@ -438,6 +521,47 @@
       .catch(function () { /* layer stays empty until the Action runs */ });
   }
 
+  /* load the live PortWatch chokepoint-traffic file (weekly Action). */
+  function refreshPortwatch() {
+    fetch("data/portwatch.json", { cache: "no-store" })
+      .then(function (r) { if (r.ok) return r.json(); throw new Error("no file"); })
+      .then(function (d) { var s = map.getSource("portwatch"); if (s && d) s.setData(d); })
+      .catch(function () { /* layer stays empty until the Action runs */ });
+  }
+
+  /* ---- ally derivation: shared blocs + bilateral pacts -------------------- */
+  function alliesOf(name) {
+    var mil = {}, econ = {};
+    function collect(keys, into) {
+      (keys || []).forEach(function (k) {
+        var list = (window.MEMBERSHIPS || {})[k] || [];
+        if (list.indexOf(name) >= 0)
+          list.forEach(function (c) { if (c !== name) into[c] = 1; });
+      });
+    }
+    var cfg = window.ALLIANCE_CONFIG || {};
+    collect(cfg.military, mil); collect(cfg.economic, econ);
+    var bp = window.BILATERAL_PACTS || {};
+    (bp.military || []).forEach(function (p) {
+      if (p[0] === name) mil[p[1]] = 1; if (p[1] === name) mil[p[0]] = 1;
+    });
+    (bp.economic || []).forEach(function (p) {
+      if (p[0] === name) econ[p[1]] = 1; if (p[1] === name) econ[p[0]] = 1;
+    });
+    return { mil: Object.keys(mil), econ: Object.keys(econ) };
+  }
+  function showAllies(name) {
+    var a = alliesOf(name);
+    map.setFilter("ally-mil", ["in", ["get", "cname"], ["literal", a.mil]]);
+    map.setFilter("ally-econ", ["in", ["get", "cname"], ["literal", a.econ]]);
+    map.setFilter("ally-self", ["==", ["get", "cname"], name]);
+  }
+  function clearAllies() {
+    ["ally-mil", "ally-econ", "ally-self"].forEach(function (id) {
+      map.setFilter(id, ["==", ["get", "cname"], "___none___"]);
+    });
+  }
+
   /* ---- control rail ----------------------------------------------------- */
   function row(kind, id, label, checked, group, color) {
     var type = kind === "rad" ? "radio" : "checkbox";
@@ -470,12 +594,22 @@
       row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp") +
       row("rad", "stat-milex", "Military spending", state.stat === "milex", "statgrp") +
 
-      "<h2>Alliances &amp; blocs — stack</h2>" +
-      BLOCS.map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("") +
+      "<h2>Defense &amp; security — stack</h2>" +
+      BLOCS.filter(function (b) { return b.group === "def"; })
+        .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("") +
+
+      "<h2>Economic &amp; political — stack</h2>" +
+      BLOCS.filter(function (b) { return b.group === "eco"; })
+        .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("") +
 
       "<h2>Conflict &amp; tension — stack</h2>" +
       row("chk", "heat", "Violence density (sample)", state.heat, null, "#ff6a3d") +
       '<p class="hint">Your editorial tension layer comes next.</p>' +
+
+      "<h2>Economy &amp; connectivity — stack</h2>" +
+      row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6") +
+      row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4") +
+      '<p class="hint">Rings sized by 7-day avg daily transits, updated weekly.</p>' +
 
       "<h2>Live signals — stack</h2>" +
       '<p class="hint">News-mention geography from GDELT, refreshed every few hours. Noisy by nature.</p>' +
@@ -483,6 +617,14 @@
 
       "<h2>Classical theory</h2>" +
       row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
+      row("chk", "rimland", "Spykman Rimland (countries)", state.rimland, null, "#C8B08A") +
+
+      "<h2>Status — stack</h2>" +
+      row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A") +
+
+      "<h2>Interaction</h2>" +
+      row("chk", "allymode", "Ally highlight on click", state.allymode, null, "#FFD633") +
+      '<p class="hint">Click a country: military allies blue, economic green.</p>' +
 
       "<h2>Reference — stack</h2>" +
       row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D");
@@ -502,6 +644,26 @@
     byId("cb-heartland").onchange = function (e) {
       state.heartland = e.target.checked;
       setVis("zone-heartland-fill", state.heartland); setVis("zone-heartland-line", state.heartland); tele();
+    };
+    byId("cb-rimland").onchange = function (e) {
+      state.rimland = e.target.checked;
+      setVis("rimland-fill", state.rimland); setVis("rimland-line", state.rimland); tele();
+    };
+    byId("cb-nuclear").onchange = function (e) {
+      state.nuclear = e.target.checked;
+      setVis("nuclear-fill", state.nuclear); setVis("nuclear-line", state.nuclear); tele();
+    };
+    byId("cb-lanes").onchange = function (e) {
+      state.lanes = e.target.checked;
+      setVis("lanes-glow", state.lanes); setVis("lanes-core", state.lanes); tele();
+    };
+    byId("cb-portwatch").onchange = function (e) {
+      state.portwatch = e.target.checked; setVis("portwatch-ring", state.portwatch); tele();
+    };
+    byId("cb-allymode").onchange = function (e) {
+      state.allymode = e.target.checked;
+      if (!state.allymode) clearAllies();
+      tele();
     };
     byId("cb-chokepoints").onchange = function (e) {
       state.chokepoints = e.target.checked;
@@ -532,16 +694,22 @@
     var c = map.getCenter();
     byId("t-coords").textContent = c.lat.toFixed(1) + "°, " + c.lng.toFixed(1) + "°";
     byId("t-zoom").textContent = map.getZoom().toFixed(1);
-    var n = (state.fill !== "none" ? 1 : 0) + (state.hillshade ? 1 : 0) +
-            (state.nato ? 1 : 0) + (state.brics ? 1 : 0) + (state.eu ? 1 : 0) +
-            (state.heat ? 1 : 0) + (state.heartland ? 1 : 0) + (state.chokepoints ? 1 : 0) +
-            (state.newspulse ? 1 : 0) + (state.stat !== "none" ? 1 : 0);
+    var n = (state.fill !== "none" ? 1 : 0) + (state.stat !== "none" ? 1 : 0) +
+            (state.hillshade ? 1 : 0) + (state.heat ? 1 : 0) +
+            (state.heartland ? 1 : 0) + (state.rimland ? 1 : 0) + (state.nuclear ? 1 : 0) +
+            (state.chokepoints ? 1 : 0) + (state.newspulse ? 1 : 0) +
+            (state.lanes ? 1 : 0) + (state.portwatch ? 1 : 0);
+    BLOCS.forEach(function (b) { if (state[b.key]) n++; });
     byId("t-layers").textContent = n;
   }
   map.on("move", tele);
 
   function wireInteraction() {
-    map.on("click", "countries-hit", function (e) { showCard(e.features[0].properties); });
+    map.on("click", "countries-hit", function (e) {
+      var p = e.features[0].properties;
+      showCard(p);
+      if (state.allymode) showAllies(p.cname);
+    });
     map.on("mouseenter", "countries-hit", function () { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "countries-hit", function () { map.getCanvas().style.cursor = ""; });
 
@@ -577,24 +745,27 @@
     if (v >= 1e3) return (v / 1e3).toFixed(0) + "k";
     return String(Math.round(v));
   }
+  function setText(id, t) { var el = byId(id); if (el) el.textContent = t; }
+  function setHTML(id, h) { var el = byId(id); if (el) el.innerHTML = h; }
   function showCard(p) {
-    byId("card-name").textContent = p.cname;
-    byId("card-tier").textContent = TIER_LABEL[p.tier] || p.tier;
-    byId("card-role").textContent = ROLE_LABEL[p.role] || "—";
+    setText("card-name", p.cname);
+    setText("card-tier", TIER_LABEL[p.tier] || p.tier);
+    setText("card-role", ROLE_LABEL[p.role] || "—");
     var chips = [];
     BLOCS.forEach(function (b) { if (p[b.key]) chips.push('<span class="chip">' + b.label + "</span>"); });
-    byId("card-blocs").innerHTML = chips.length ? chips.join("") : '<span class="value">—</span>';
+    setHTML("card-blocs", chips.length ? chips.join("") : '<span class="value">—</span>');
 
     var st = powerOf(p.cname);
     var hasStats = st.gdp || st.pop || st.milex;
-    byId("card-stats").innerHTML = hasStats
+    setHTML("card-stats", hasStats
       ? "GDP " + fmtUSD(st.gdp) + " &middot; Pop " + fmtNum(st.pop) +
         "<br>Per cap " + fmtUSD(st.gdppc) + " &middot; Mil " + fmtUSD(st.milex)
-      : "—";
+      : "—");
     var wb = byId("card-wb");
-    if (st.iso3) { wb.href = "https://data.worldbank.org/country/" + st.iso3; wb.style.display = "inline-block"; }
-    else { wb.style.display = "none"; }
-
-    byId("card").classList.add("show");
+    if (wb) {
+      if (st.iso3) { wb.href = "https://data.worldbank.org/country/" + st.iso3; wb.style.display = "inline-block"; }
+      else { wb.style.display = "none"; }
+    }
+    var card = byId("card"); if (card) card.classList.add("show");
   }
 })();

@@ -76,12 +76,17 @@ proven with real (if partial) data. Filling in the rest is mostly editing data.
 - [x] **Point/label layer** — chokepoints & straits
 - [x] **Auto-updating UCDP conflict feed** (weekly GitHub Action → committed GeoJSON)
 - [x] **Computed power fill** from World Bank indicators (weekly Action, CINC-style composite)
-- [x] **GDELT news-pulse** live signal layer (Action every few hours)
+- [x] **GDELT news-pulse** live signal layer (parked: GDELT blocks server fetches; to be revived as an in-browser live layer)
+- [x] **15 blocs** as stackable outlines, grouped Defense vs Economic/political
+- [x] **Ally highlight on click** (derived from defense/economic blocs + bilateral pacts; edit ALLIANCE_CONFIG and BILATERAL_PACTS in data/countries.js)
+- [x] **Shipping**: static major-routes layer (data/shipping-lanes.js, editable) + live PortWatch chokepoint traffic (weekly Action -> data/portwatch.json)
+- [x] **Spykman Rimland** tan country fill (edit window.RIMLAND in data/countries.js)
+- [x] **Nuclear weapons states** green hatch overlay (edit window.NUCLEAR)
+- [x] **World Bank coverage expanded to ~165 countries**
 
 ### Next up (priority order)
 - [ ] **Editorial interstate-tension layer** (your main goal) — heat + arcs you control
 - [ ] **Flat equal-area export** (Equal Earth / Robinson) for article screenshots
-- [ ] More blocs: CSTO, AUKUS, Five Eyes, QUAD, SCO, ASEAN, AU, GCC, Arab League, OAS, Mercosur, OPEC+, RCEP, CPTPP, Commonwealth, EAEU
 - [ ] More fills: nuclear status, regime type, economic tier
 - [ ] More zones: Spykman Rimland, shatterbelts, Cohen's realms
 - [ ] Flow layers: trade, energy pipelines, Belt & Road, undersea cables, shipping lanes
