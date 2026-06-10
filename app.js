@@ -243,6 +243,7 @@
       f.properties.rimland = !!(key && rim[key]);
       f.properties.nuclear = !!(key && nuc[key]);
       f.properties.composite = powerOf(f.properties.cname).composite || 0;
+      f.properties.renew = powerOf(f.properties.cname).renew || 0;
     });
   }
 
@@ -269,7 +270,8 @@
       var st = powerOf(f.properties.cname);
       feats.push({ type: "Feature",
         properties: { cname: f.properties.cname, pop: st.pop || 0, gdp: st.gdp || 0,
-          gdppc: st.gdppc || 0, milex: st.milex || 0, milper: st.milper || 0, r: 0 },
+          gdppc: st.gdppc || 0, milex: st.milex || 0, milper: st.milper || 0,
+          renew: st.renew || 0, r: 0 },
         geometry: { type: "Point", coordinates: c } });
     });
     return fc(feats);
@@ -315,6 +317,13 @@
       paint: { "fill-color": ["interpolate", ["linear"], ["get", "composite"],
         0, "#2A3343", 0.01, "#5B4A22", 0.03, "#8A6A1E",
         0.06, "#C28A2A", 0.12, "#F0A83C", 0.2, "#FFD633"],
+        "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // renewables — % of electricity output, green ramp
+    map.addLayer({ id: "fill-renew", type: "fill", source: "countries",
+      paint: { "fill-color": ["interpolate", ["linear"], ["get", "renew"],
+        0, "#2A3343", 20, "#2E5247", 45, "#2F7556", 70, "#36A06A", 95, "#3FE08A"],
         "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
@@ -447,6 +456,7 @@
     setVis("fill-tier", state.fill === "tier");
     setVis("fill-role", state.fill === "role");
     setVis("fill-power", state.fill === "power");
+    setVis("fill-renew", state.fill === "renew");
   }
 
   /* swap the sample heat points for the live UCDP file once it exists in /data.
@@ -479,6 +489,7 @@
     if (!COUNTRIES_GEO) return;
     COUNTRIES_GEO.features.forEach(function (f) {
       f.properties.composite = powerOf(f.properties.cname).composite || 0;
+      f.properties.renew = powerOf(f.properties.cname).renew || 0;
     });
     var s = map.getSource("countries");
     if (s) s.setData(COUNTRIES_GEO);
@@ -507,7 +518,7 @@
       var st = powerOf(f.properties.cname);
       f.properties.pop = st.pop || 0; f.properties.gdp = st.gdp || 0;
       f.properties.gdppc = st.gdppc || 0; f.properties.milex = st.milex || 0;
-      f.properties.milper = st.milper || 0;
+      f.properties.milper = st.milper || 0; f.properties.renew = st.renew || 0;
     });
     if (state.stat !== "none") switchStat(state.stat);
     else { var s = map.getSource("country-points"); if (s) s.setData(COUNTRY_POINTS_GEO); }
@@ -572,68 +583,85 @@
            '<span class="label">' + label + "</span></label>";
   }
 
+  function sec(id, title, inner, hint, startOpen) {
+    return '<h2 class="sec' + (startOpen === false ? " closed" : "") + '" data-sec="' + id + '">' + title + "</h2>" +
+           '<div class="secbody' + (startOpen === false ? " collapsed" : "") + '" id="sec-' + id + '">' +
+           (hint ? '<p class="hint">' + hint + "</p>" : "") + inner + "</div>";
+  }
+
   function buildRail() {
     var rail = byId("rail");
+    var defBlocs = BLOCS.filter(function (b) { return b.group === "def"; })
+      .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("");
+    var ecoBlocs = BLOCS.filter(function (b) { return b.group === "eco"; })
+      .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("");
+
     rail.innerHTML =
-      "<h2>Base</h2>" +
-      row("chk", "hillshade", "Terrain &amp; elevation", state.hillshade) +
+      sec("base", "Base",
+        row("chk", "hillshade", "Terrain &amp; elevation", state.hillshade)) +
 
-      "<h2>Country fill — choose one</h2>" +
-      '<p class="hint">Only one can paint the countries at a time.</p>' +
-      row("rad", "fill-none", "None", state.fill === "none", "fillgrp") +
-      row("rad", "fill-tier", "Power tier", state.fill === "tier", "fillgrp") +
-      row("rad", "fill-role", "Agent / pivot", state.fill === "role", "fillgrp") +
-      row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp") +
-      '<div class="legend" id="legend"></div>' +
+      sec("fill", "Country fill — choose one",
+        row("rad", "fill-none", "None", state.fill === "none", "fillgrp") +
+        row("rad", "fill-tier", "Power tier", state.fill === "tier", "fillgrp") +
+        row("rad", "fill-role", "Agent / pivot", state.fill === "role", "fillgrp") +
+        row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp") +
+        row("rad", "fill-renew", "Renewables (% of grid)", state.fill === "renew", "fillgrp") +
+        '<div class="legend" id="legend"></div>',
+        "Only one can paint the countries at a time.") +
 
-      "<h2>Country statistics — choose one</h2>" +
-      '<p class="hint">Sized circles, World Bank latest. Combine with any fill.</p>' +
-      row("rad", "stat-none", "None", state.stat === "none", "statgrp") +
-      row("rad", "stat-pop", "Population", state.stat === "pop", "statgrp") +
-      row("rad", "stat-gdp", "GDP", state.stat === "gdp", "statgrp") +
-      row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp") +
-      row("rad", "stat-milex", "Military spending", state.stat === "milex", "statgrp") +
+      sec("stats", "Country statistics — choose one",
+        row("rad", "stat-none", "None", state.stat === "none", "statgrp") +
+        row("rad", "stat-pop", "Population", state.stat === "pop", "statgrp") +
+        row("rad", "stat-gdp", "GDP", state.stat === "gdp", "statgrp") +
+        row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp") +
+        row("rad", "stat-milex", "Military spending", state.stat === "milex", "statgrp") +
+        row("rad", "stat-renew", "Renewables %", state.stat === "renew", "statgrp"),
+        "Sized circles, World Bank latest. Combine with any fill.") +
 
-      "<h2>Defense &amp; security — stack</h2>" +
-      BLOCS.filter(function (b) { return b.group === "def"; })
-        .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("") +
+      sec("def", "Defense &amp; security — stack", defBlocs, null, false) +
+      sec("eco", "Economic &amp; political — stack", ecoBlocs, null, false) +
 
-      "<h2>Economic &amp; political — stack</h2>" +
-      BLOCS.filter(function (b) { return b.group === "eco"; })
-        .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("") +
+      sec("conflict", "Conflict &amp; tension — stack",
+        row("chk", "heat", "Violence density (sample)", state.heat, null, "#ff6a3d"),
+        "Your editorial tension layer comes next.") +
 
-      "<h2>Conflict &amp; tension — stack</h2>" +
-      row("chk", "heat", "Violence density (sample)", state.heat, null, "#ff6a3d") +
-      '<p class="hint">Your editorial tension layer comes next.</p>' +
+      sec("ship", "Economy &amp; connectivity — stack",
+        row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6") +
+        row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4"),
+        "Rings sized by 7-day avg daily transits, updated weekly.") +
 
-      "<h2>Economy &amp; connectivity — stack</h2>" +
-      row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6") +
-      row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4") +
-      '<p class="hint">Rings sized by 7-day avg daily transits, updated weekly.</p>' +
+      sec("signals", "Live signals — stack",
+        row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF"),
+        "News-mention geography, refreshed every few hours. Noisy by nature.", false) +
 
-      "<h2>Live signals — stack</h2>" +
-      '<p class="hint">News-mention geography from GDELT, refreshed every few hours. Noisy by nature.</p>' +
-      row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
+      sec("theory", "Classical theory",
+        row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
+        row("chk", "rimland", "Spykman Rimland (countries)", state.rimland, null, "#C8B08A")) +
 
-      "<h2>Classical theory</h2>" +
-      row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
-      row("chk", "rimland", "Spykman Rimland (countries)", state.rimland, null, "#C8B08A") +
+      sec("status", "Status — stack",
+        row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A")) +
 
-      "<h2>Status — stack</h2>" +
-      row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A") +
+      sec("interact", "Interaction",
+        row("chk", "allymode", "Ally highlight on click", state.allymode, null, "#FFD633"),
+        "Click a country: military allies blue, economic green.") +
 
-      "<h2>Interaction</h2>" +
-      row("chk", "allymode", "Ally highlight on click", state.allymode, null, "#FFD633") +
-      '<p class="hint">Click a country: military allies blue, economic green.</p>' +
+      sec("ref", "Reference — stack",
+        row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D"));
 
-      "<h2>Reference — stack</h2>" +
-      row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D");
+    // collapsible headers
+    Array.prototype.forEach.call(rail.querySelectorAll("h2.sec"), function (h) {
+      h.addEventListener("click", function () {
+        h.classList.toggle("closed");
+        var body = byId("sec-" + h.getAttribute("data-sec"));
+        if (body) body.classList.toggle("collapsed");
+      });
+    });
 
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role", "power"].forEach(function (v) {
+    ["none", "tier", "role", "power", "renew"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
     });
-    ["none", "pop", "gdp", "gdppc", "milex"].forEach(function (m) {
+    ["none", "pop", "gdp", "gdppc", "milex", "renew"].forEach(function (m) {
       byId("cb-stat-" + m).onchange = function (e) { if (e.target.checked) switchStat(m); };
     });
     BLOCS.forEach(function (b) {
@@ -683,6 +711,8 @@
       ? [["Agent", "#3FA37A"], ["Pivot", "#D98AE0"]]
       : state.fill === "power"
       ? [["Lower", "#3B5266"], ["", "#C28A2A"], ["Higher", "#FFD633"]]
+      : state.fill === "renew"
+      ? [["0%", "#2A3343"], ["50%", "#2F7556"], ["100%", "#3FE08A"]]
       : [];
     el.innerHTML = items.map(function (i) {
       return '<span><i style="background:' + i[1] + '"></i>' + i[0] + "</span>";
@@ -759,7 +789,9 @@
     var hasStats = st.gdp || st.pop || st.milex;
     setHTML("card-stats", hasStats
       ? "GDP " + fmtUSD(st.gdp) + " &middot; Pop " + fmtNum(st.pop) +
-        "<br>Per cap " + fmtUSD(st.gdppc) + " &middot; Mil " + fmtUSD(st.milex)
+        "<br>Per cap " + fmtUSD(st.gdppc) + " &middot; Mil " + fmtUSD(st.milex) +
+        "<br>Forces " + fmtNum(st.milper) +
+        (st.renew ? " &middot; Renewables " + Math.round(st.renew) + "%" : "")
       : "—");
     var wb = byId("card-wb");
     if (wb) {

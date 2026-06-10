@@ -29,7 +29,7 @@ def main():
         "where": "date >= TIMESTAMP '{} 00:00:00'".format(since),
         "outFields": "portid,portname,date,vessel_count_total",
         "outSR": "4326", "f": "json", "returnGeometry": "true",
-        "resultRecordCount": "2000",
+        "resultRecordCount": "1000",
     }
     url = SERVICE + "?" + urllib.parse.urlencode(params)
     try:
