@@ -181,7 +181,7 @@
     hillshade: true, fill: "tier", stat: "none",
     heat: true, heartland: false, rimland: false, nuclear: false,
     chokepoints: true, newspulse: false, lanes: false, portwatch: false, bri: false,
-    allymode: false
+    allymode: false, advmode: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
 
@@ -244,8 +244,13 @@
       BLOCS.forEach(function (b) { f.properties[b.key] = !!(key && blocSets[b.key][key]); });
       f.properties.rimland = !!(key && rim[key]);
       f.properties.nuclear = !!(key && nuc[key]);
-      f.properties.composite = powerOf(f.properties.cname).composite || 0;
-      f.properties.renew = powerOf(f.properties.cname).renew || 0;
+      var st = powerOf(f.properties.cname);
+      f.properties.composite = st.composite || 0;
+      f.properties.renew = st.renew || 0;
+      f.properties.milexv = st.milex || 0;
+      f.properties.gini = (st.gini === undefined ? -1 : st.gini);
+      f.properties.trade = (st.trade === undefined ? -999 : st.trade);
+      f.properties.relig = (window.RELIGION || {})[f.properties.cname] || "none";
     });
   }
 
@@ -330,6 +335,36 @@
     map.addLayer({ id: "fill-renew", type: "fill", source: "countries",
       paint: { "fill-color": ["interpolate", ["linear"], ["get", "renew"],
         0, "#2A3343", 20, "#2E5247", 45, "#2F7556", 70, "#36A06A", 95, "#3FE08A"],
+        "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // military spending fill (USD, log-ish stops)
+    map.addLayer({ id: "fill-milex", type: "fill", source: "countries",
+      paint: { "fill-color": ["interpolate", ["linear"], ["get", "milexv"],
+        0, "#2A3343", 1e9, "#5A3A3A", 1e10, "#8E4538", 6e10, "#C2552E", 3e11, "#F07F2E", 9e11, "#FFD633"],
+        "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // Gini inequality fill (missing = -1 stays dark)
+    map.addLayer({ id: "fill-gini", type: "fill", source: "countries",
+      paint: { "fill-color": ["interpolate", ["linear"], ["get", "gini"],
+        -1, "#2A3343", 25, "#4E88A6", 35, "#C9A227", 45, "#E8843D", 55, "#E84393"],
+        "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // trade balance fill (diverging; missing = -999 dark)
+    map.addLayer({ id: "fill-trade", type: "fill", source: "countries",
+      paint: { "fill-color": ["interpolate", ["linear"], ["get", "trade"],
+        -999, "#2A3343", -20, "#E84393", -5, "#8E4538", 0, "#3B5266", 5, "#2F7556", 20, "#3FE08A"],
+        "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // majority religion fill
+    map.addLayer({ id: "fill-religion", type: "fill", source: "countries",
+      paint: { "fill-color": ["match", ["get", "relig"],
+        "christian", "#6C8EBF", "muslim", "#3FA37A", "hindu", "#E8843D",
+        "buddhist", "#C9A227", "jewish", "#5BC8FF", "folk", "#B57EDC",
+        "unaffiliated", "#8A93A6", "#2A3343"],
         "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
@@ -466,6 +501,9 @@
     map.addLayer({ id: "ally-econ", type: "fill", source: "countries",
       filter: ["==", ["get", "cname"], "___none___"],
       paint: { "fill-color": "#2ECC71", "fill-opacity": 0.26 } });
+    map.addLayer({ id: "ally-adv", type: "fill", source: "countries",
+      filter: ["==", ["get", "cname"], "___none___"],
+      paint: { "fill-color": "#FF4D4D", "fill-opacity": 0.34 } });
     map.addLayer({ id: "ally-self", type: "line", source: "countries",
       filter: ["==", ["get", "cname"], "___none___"],
       paint: { "line-color": "#FFD633", "line-width": 2.5 } });
@@ -482,6 +520,10 @@
     setVis("fill-role", state.fill === "role");
     setVis("fill-power", state.fill === "power");
     setVis("fill-renew", state.fill === "renew");
+    setVis("fill-milex", state.fill === "milex");
+    setVis("fill-gini", state.fill === "gini");
+    setVis("fill-trade", state.fill === "trade");
+    setVis("fill-religion", state.fill === "religion");
   }
 
   /* swap the sample heat points for the live UCDP file once it exists in /data.
@@ -513,8 +555,12 @@
   function applyComposite() {
     if (!COUNTRIES_GEO) return;
     COUNTRIES_GEO.features.forEach(function (f) {
-      f.properties.composite = powerOf(f.properties.cname).composite || 0;
-      f.properties.renew = powerOf(f.properties.cname).renew || 0;
+      var st = powerOf(f.properties.cname);
+      f.properties.composite = st.composite || 0;
+      f.properties.renew = st.renew || 0;
+      f.properties.milexv = st.milex || 0;
+      f.properties.gini = (st.gini === undefined ? -1 : st.gini);
+      f.properties.trade = (st.trade === undefined ? -999 : st.trade);
     });
     var s = map.getSource("countries");
     if (s) s.setData(COUNTRIES_GEO);
@@ -604,6 +650,20 @@
       map.setFilter(id, ["==", ["get", "cname"], "___none___"]);
     });
   }
+  function adversariesOf(name) {
+    var out = {};
+    (window.ADVERSARIES || []).forEach(function (p) {
+      if (p[0] === name) out[p[1]] = 1; if (p[1] === name) out[p[0]] = 1;
+    });
+    return Object.keys(out);
+  }
+  function showAdversaries(name) {
+    map.setFilter("ally-adv", ["in", ["get", "cname"], ["literal", adversariesOf(name)]]);
+    map.setFilter("ally-self", ["==", ["get", "cname"], name]);
+  }
+  function clearAdversaries() {
+    map.setFilter("ally-adv", ["==", ["get", "cname"], "___none___"]);
+  }
 
   /* ---- control rail ----------------------------------------------------- */
   function row(kind, id, label, checked, group, color) {
@@ -638,6 +698,10 @@
         row("rad", "fill-role", "Agent / pivot", state.fill === "role", "fillgrp") +
         row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp") +
         row("rad", "fill-renew", "Renewables (% of grid)", state.fill === "renew", "fillgrp") +
+        row("rad", "fill-milex", "Military spending", state.fill === "milex", "fillgrp") +
+        row("rad", "fill-gini", "Inequality (Gini)", state.fill === "gini", "fillgrp") +
+        row("rad", "fill-trade", "Trade balance (% GDP)", state.fill === "trade", "fillgrp") +
+        row("rad", "fill-religion", "Majority religion", state.fill === "religion", "fillgrp") +
         '<div class="legend" id="legend"></div>',
         "Only one can paint the countries at a time.") +
 
@@ -647,6 +711,7 @@
         row("rad", "stat-gdp", "GDP", state.stat === "gdp", "statgrp") +
         row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp") +
         row("rad", "stat-milex", "Military spending", state.stat === "milex", "statgrp") +
+        row("rad", "stat-milper", "Military personnel", state.stat === "milper", "statgrp") +
         row("rad", "stat-renew", "Renewables %", state.stat === "renew", "statgrp"),
         "Sized circles, World Bank latest. Combine with any fill.") +
 
@@ -675,8 +740,9 @@
         row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A")) +
 
       sec("interact", "Interaction",
-        row("chk", "allymode", "Ally highlight on click", state.allymode, null, "#FFD633"),
-        "Click a country: military allies blue, economic green.") +
+        row("chk", "allymode", "Ally highlight on click", state.allymode, null, "#FFD633") +
+        row("chk", "advmode", "Adversary highlight on click", state.advmode, null, "#FF4D4D"),
+        "Click a country: military allies blue, economic green, adversaries red.") +
 
       sec("ref", "Reference — stack",
         row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D"));
@@ -691,10 +757,10 @@
     });
 
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role", "power", "renew"].forEach(function (v) {
+    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
     });
-    ["none", "pop", "gdp", "gdppc", "milex", "renew"].forEach(function (m) {
+    ["none", "pop", "gdp", "gdppc", "milex", "milper", "renew"].forEach(function (m) {
       byId("cb-stat-" + m).onchange = function (e) { if (e.target.checked) switchStat(m); };
     });
     BLOCS.forEach(function (b) {
@@ -730,6 +796,11 @@
       if (!state.allymode) clearAllies();
       tele();
     };
+    byId("cb-advmode").onchange = function (e) {
+      state.advmode = e.target.checked;
+      if (!state.advmode) clearAdversaries();
+      tele();
+    };
     byId("cb-chokepoints").onchange = function (e) {
       state.chokepoints = e.target.checked;
       setVis("chokepoint-dot", state.chokepoints); setVis("chokepoint-label", state.chokepoints); tele();
@@ -750,6 +821,16 @@
       ? [["Lower", "#3B5266"], ["", "#C28A2A"], ["Higher", "#FFD633"]]
       : state.fill === "renew"
       ? [["0%", "#2A3343"], ["50%", "#2F7556"], ["100%", "#3FE08A"]]
+      : state.fill === "milex"
+      ? [["Low", "#5A3A3A"], ["Mid", "#C2552E"], ["High", "#FFD633"]]
+      : state.fill === "gini"
+      ? [["Equal 25", "#4E88A6"], ["40", "#E8843D"], ["Unequal 55", "#E84393"]]
+      : state.fill === "trade"
+      ? [["Deficit", "#E84393"], ["0", "#3B5266"], ["Surplus", "#3FE08A"]]
+      : state.fill === "religion"
+      ? [["Christian", "#6C8EBF"], ["Muslim", "#3FA37A"], ["Hindu", "#E8843D"],
+         ["Buddhist", "#C9A227"], ["Jewish", "#5BC8FF"], ["Folk", "#B57EDC"],
+         ["Unaffil.", "#8A93A6"]]
       : [];
     el.innerHTML = items.map(function (i) {
       return '<span><i style="background:' + i[1] + '"></i>' + i[0] + "</span>";
@@ -776,6 +857,7 @@
       var p = e.features[0].properties;
       showCard(p);
       if (state.allymode) showAllies(p.cname);
+      if (state.advmode) showAdversaries(p.cname);
     });
     map.on("mouseenter", "countries-hit", function () { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "countries-hit", function () { map.getCanvas().style.cursor = ""; });
@@ -828,7 +910,9 @@
       ? "GDP " + fmtUSD(st.gdp) + " &middot; Pop " + fmtNum(st.pop) +
         "<br>Per cap " + fmtUSD(st.gdppc) + " &middot; Mil " + fmtUSD(st.milex) +
         "<br>Forces " + fmtNum(st.milper) +
-        (st.renew ? " &middot; Renewables " + Math.round(st.renew) + "%" : "")
+        (st.renew ? " &middot; Renewables " + Math.round(st.renew) + "%" : "") +
+        (st.gini !== undefined ? "<br>Gini " + Math.round(st.gini) : "") +
+        (st.trade !== undefined ? " &middot; Trade bal " + (st.trade > 0 ? "+" : "") + st.trade.toFixed(1) + "% GDP" : "")
       : "—");
     var wb = byId("card-wb");
     if (wb) {

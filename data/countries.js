@@ -139,11 +139,33 @@ window.BILATERAL_PACTS = {
   military: [
     ["United States","Japan"], ["United States","South Korea"],
     ["United States","Philippines"], ["United States","Thailand"],
-    ["United States","Israel"],
-    ["Russia","North Korea"], ["China","North Korea"]
+    ["United States","Israel"], ["United States","Egypt"],
+    ["United States","Jordan"], ["United States","Kuwait"],
+    ["United States","Bahrain"], ["United States","Qatar"],
+    ["United States","Morocco"], ["United States","Tunisia"],
+    ["United States","Kenya"], ["United States","Colombia"],
+    ["United States","Argentina"], ["United States","Brazil"],
+    ["United States","Taiwan"],
+    ["Russia","North Korea"], ["Russia","Iran"], ["Russia","Syria"],
+    ["China","North Korea"], ["China","Pakistan"],
+    ["France","Greece"]
   ],
-  economic: []
+  economic: [["China","Pakistan"], ["Russia","India"]]
 };
+
+/* ---- ADVERSARY PAIRS (editorial — used by "Adversary highlight") ---------- */
+window.ADVERSARIES = [
+  ["United States","China"], ["United States","Russia"],
+  ["United States","Iran"], ["United States","North Korea"],
+  ["United States","Venezuela"], ["United States","Cuba"],
+  ["China","India"], ["China","Taiwan"], ["China","Japan"],
+  ["China","Philippines"], ["India","Pakistan"],
+  ["Russia","Ukraine"], ["Russia","United Kingdom"], ["Russia","Poland"],
+  ["Israel","Iran"], ["Saudi Arabia","Iran"],
+  ["North Korea","South Korea"], ["Armenia","Azerbaijan"],
+  ["Greece","Turkey"], ["Morocco","Algeria"], ["Venezuela","Guyana"],
+  ["Ethiopia","Eritrea"], ["Rwanda","Dem. Rep. Congo"]
+];
 
 /* ---- NAME ALIASES (map-data spelling -> your spelling) -------------------- */
 window.NAME_ALIASES = {

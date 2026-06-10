@@ -11,6 +11,8 @@ INDICATORS = {
     "gdp": "NY.GDP.MKTP.CD", "gdppc": "NY.GDP.PCAP.CD", "pop": "SP.POP.TOTL",
     "urb": "SP.URB.TOTL", "milex": "MS.MIL.XPND.CD", "milper": "MS.MIL.TOTL.P1",
     "renew": "EG.ELC.RNEW.ZS",  # renewable electricity, % of output (latest available)
+    "gini": "SI.POV.GINI",
+    "trade": "NE.RSB.GNFS.ZS",  # external balance goods+services, % of GDP
 }
 COMPOSITE_KEYS = ["milex", "milper", "pop", "urb", "gdp"]
 
@@ -124,7 +126,7 @@ def main():
         entry = {"iso3": iso3}
         if shares:
             entry["composite"] = round(sum(shares) / len(shares), 4)
-        for k in ("gdp", "gdppc", "pop", "milex", "milper", "renew"):
+        for k in ("gdp", "gdppc", "pop", "milex", "milper", "renew", "gini", "trade"):
             v = raw.get(k, {}).get(iso3)
             if v is not None:
                 entry[k] = round(v)
