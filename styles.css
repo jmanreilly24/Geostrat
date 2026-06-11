@@ -47,9 +47,21 @@ html, body {
   text-shadow: 0 2px 18px rgba(0,0,0,0.7);
 }
 
+/* ---- Rail toggle button -------------------------------------------------- */
+.rail-toggle {
+  position: absolute; top: 18px; right: 18px; z-index: 7;
+  width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
+  background: var(--panel); backdrop-filter: blur(10px);
+  border: 1px solid var(--hairline); color: var(--signal); font-size: 17px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4); transition: all 140ms ease;
+}
+.rail-toggle:hover { border-color: var(--signal); }
+.rail.hidden { transform: translateX(112%); opacity: 0; pointer-events: none; }
+.rail { transition: transform 220ms ease, opacity 220ms ease; }
+
 /* ---- Control rail ------------------------------------------------------- */
 .rail {
-  position: absolute; top: 18px; right: 18px; z-index: 6; width: 268px;
+  position: absolute; top: 68px; right: 18px; z-index: 6; width: 268px;
   max-height: calc(100vh - 130px); overflow-y: auto;
   background: var(--panel); backdrop-filter: blur(14px);
   border: 1px solid var(--hairline); border-radius: var(--radius);

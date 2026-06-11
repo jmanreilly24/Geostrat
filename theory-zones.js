@@ -9,12 +9,13 @@
 window.THEORY_ZONES = {
   heartland: {
     type: "Feature",
-    properties: { name: "Mackinder Heartland (approx.)" },
+    properties: { name: "Mackinder Heartland (1919, approx.)" },
     geometry: {
       type: "Polygon",
       coordinates: [[
-        [30, 50], [55, 52], [90, 55], [110, 58], [120, 50],
-        [115, 42], [95, 38], [70, 37], [55, 40], [40, 45], [30, 50]
+        [25, 68], [40, 75], [70, 77], [105, 76], [130, 72],
+        [128, 62], [122, 52], [108, 43], [92, 38], [72, 36],
+        [56, 38], [46, 41], [36, 46], [27, 54], [22, 60], [25, 68]
       ]]
     }
   }

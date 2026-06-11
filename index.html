@@ -28,6 +28,7 @@
   <!-- © 2026 [YOUR NAME]. All rights reserved. See LICENSE.md -->
 
   <!-- Control rail — populated by app.js -->
+  <button id="rail-toggle" class="rail-toggle" aria-label="Toggle layers panel">☰</button>
   <aside class="rail" id="rail" aria-label="Map layers"></aside>
 
   <!-- Telemetry strip -->
@@ -35,7 +36,9 @@
     <span><span class="dot">◎</span> <b id="t-coords">0.0°, 0.0°</b></span>
     <span>ZOOM <b id="t-zoom">2.0</b></span>
     <span>LAYERS <b id="t-layers">0</b></span>
+    <span>UPD <b id="t-upd">&mdash;</b></span>
     <span class="spin" id="t-spin" role="button" tabindex="0">SPIN ▷</span>
+    <span class="spin" id="t-proj" role="button" tabindex="0">FLAT ▭</span>
   </div>
 
   <!-- Country info card -->
@@ -48,6 +51,8 @@
     <p class="value" id="card-role">—</p>
     <p class="field">Blocs</p>
     <div class="chips" id="card-blocs"></div>
+    <p class="field">Weather now</p>
+    <div class="value" id="card-wx" style="font-size:13px">&mdash;</div>
     <p class="field">Conflicts</p>
     <div class="value" id="card-conflict" style="font-size:12px;line-height:1.45">—</div>
     <p class="field">Indicators</p>
@@ -69,6 +74,8 @@
   <script src="data/bri.js"></script>
   <script src="data/religion.js"></script>
   <script src="data/conflicts.js"></script>
+  <script src="data/bases.js"></script>
+  <script src="data/proposals.js"></script>
 
   <!-- App -->
   <script src="app.js"></script>

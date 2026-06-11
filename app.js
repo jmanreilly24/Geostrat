@@ -143,9 +143,9 @@
       base: {
         type: "raster",
         tiles: [
-          "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-          "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-          "https://c.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png"
+          "https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
+          "https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png",
+          "https://c.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}.png"
         ],
         tileSize: 256,
         attribution: "© OpenStreetMap contributors © CARTO"
@@ -181,7 +181,7 @@
     hillshade: true, fill: "tier", stat: "none",
     heat: true, heartland: false, rimland: false, nuclear: false,
     chokepoints: true, newspulse: false, lanes: false, portwatch: false, bri: false,
-    allymode: false, advmode: false
+    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, radar: false, clouds: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
 
@@ -216,6 +216,7 @@
         refreshPower();
         refreshNewspulse();
         refreshPortwatch();
+        loadWeather();
         buildRail();
         wireInteraction();
         byId("overlay").classList.add("hide");
@@ -244,6 +245,9 @@
       BLOCS.forEach(function (b) { f.properties[b.key] = !!(key && blocSets[b.key][key]); });
       f.properties.rimland = !!(key && rim[key]);
       f.properties.nuclear = !!(key && nuc[key]);
+      var ni = (window.NUCLEAR_INFO || {})[f.properties.cname];
+      f.properties.nicbm = !!(ni && ni.icbm);
+      f.properties.nh = !!(ni && ni.h);
       var st = powerOf(f.properties.cname);
       f.properties.composite = st.composite || 0;
       f.properties.renew = st.renew || 0;
@@ -284,7 +288,8 @@
       feats.push({ type: "Feature",
         properties: { cname: f.properties.cname, pop: st.pop || 0, gdp: st.gdp || 0,
           gdppc: st.gdppc || 0, milex: st.milex || 0, milper: st.milper || 0,
-          renew: st.renew || 0, r: 0 },
+          renew: st.renew || 0, r: 0,
+          nwh: ((window.NUCLEAR_INFO || {})[f.properties.cname] || {}).wh || 0 },
         geometry: { type: "Point", coordinates: c } });
     });
     return fc(feats);
@@ -436,9 +441,15 @@
       filter: ["==", ["get", "nuclear"], true],
       paint: { "fill-pattern": "nuclear-hatch", "fill-opacity": 0.65 },
       layout: { visibility: "none" } });
-    map.addLayer({ id: "nuclear-line", type: "line", source: "countries",
-      filter: ["==", ["get", "nuclear"], true],
-      paint: { "line-color": "#3FE08A", "line-width": 1.2, "line-opacity": 0.7 },
+    map.addLayer({ id: "nuclear-line-icbm", type: "line", source: "countries",
+      filter: ["all", ["==", ["get", "nuclear"], true], ["==", ["get", "nicbm"], true]],
+      paint: { "line-color": ["case", ["get", "nh"], "#3FE08A", "#C9E84D"],
+        "line-width": 2 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "nuclear-line-reg", type: "line", source: "countries",
+      filter: ["all", ["==", ["get", "nuclear"], true], ["==", ["get", "nicbm"], false]],
+      paint: { "line-color": ["case", ["get", "nh"], "#3FE08A", "#C9E84D"],
+        "line-width": 2, "line-dasharray": [2, 1.6] },
       layout: { visibility: "none" } });
 
     // Shipping lanes — static arteries with a soft glow
@@ -517,6 +528,23 @@
         "circle-stroke-color": "#0B1020", "circle-stroke-width": 0.5 },
       layout: { visibility: "none" } });
 
+    // military bases (filtered on click when bases mode is on)
+    map.addSource("bases", { type: "geojson", data: fc((window.BASES || []).map(function (b) {
+      return { type: "Feature", properties: { owner: b.owner, name: b.name, host: b.host },
+               geometry: { type: "Point", coordinates: [b.lng, b.lat] } };
+    })) });
+    [["bases-own", "#FFD633"], ["bases-ally", "#4DA3FF"], ["bases-adv", "#FF4D4D"]].forEach(function (cfg) {
+      map.addLayer({ id: cfg[0], type: "circle", source: "bases",
+        filter: ["==", ["get", "owner"], "___none___"],
+        paint: { "circle-radius": 4.5, "circle-color": cfg[1],
+          "circle-stroke-color": "#0B1020", "circle-stroke-width": 1.4 } });
+      map.addLayer({ id: cfg[0] + "-label", type: "symbol", source: "bases",
+        filter: ["==", ["get", "owner"], "___none___"],
+        layout: { "text-field": ["get", "name"], "text-font": ["Open Sans Regular"],
+          "text-size": 10, "text-offset": [0, 1], "text-anchor": "top", "text-optional": true },
+        paint: { "text-color": cfg[1], "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
+    });
+
     // ally highlight (filters set on click when ally mode is on)
     map.addLayer({ id: "ally-mil", type: "fill", source: "countries",
       filter: ["==", ["get", "cname"], "___none___"],
@@ -530,6 +558,66 @@
     map.addLayer({ id: "ally-self", type: "line", source: "countries",
       filter: ["==", ["get", "cname"], "___none___"],
       paint: { "line-color": "#FFD633", "line-width": 2.5 } });
+
+    // crisp vector country names (replaces blurry raster labels)
+    map.addLayer({ id: "country-names", type: "symbol", source: "country-points",
+      layout: { "text-field": ["get", "cname"], "text-font": ["Open Sans Regular"],
+        "text-transform": "uppercase", "text-letter-spacing": 0.12,
+        "text-size": ["interpolate", ["linear"], ["zoom"], 1, 9, 3, 11.5, 5, 14.5],
+        "text-padding": 4 },
+      paint: { "text-color": "#A8B2C4", "text-halo-color": "#0B1020", "text-halo-width": 1.6,
+        "text-opacity": 0.95 } });
+
+    // nuclear warhead-count labels (with the nuclear toggle)
+    map.addLayer({ id: "nuclear-label", type: "symbol", source: "country-points",
+      filter: [">", ["get", "nwh"], 0],
+      layout: { "text-field": ["concat", "\u2248", ["to-string", ["get", "nwh"]], " wh"],
+        "text-font": ["Open Sans Regular"], "text-size": 10.5,
+        "text-offset": [0, 1.4], "text-anchor": "top", visibility: "none" },
+      paint: { "text-color": "#3FE08A", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
+
+    // Island Chains
+    map.addSource("islandchains", { type: "geojson", data: fc((window.ISLAND_CHAINS || []).map(function (r) {
+      return { type: "Feature", properties: { name: r.name },
+               geometry: { type: "MultiLineString", coordinates: r.segments } };
+    })) });
+    map.addLayer({ id: "islandchains-line", type: "line", source: "islandchains",
+      paint: { "line-color": "#5BC8FF", "line-width": 1.8, "line-opacity": 0.8 },
+      layout: { "line-cap": "round", visibility: "none" } });
+
+    // String of Pearls
+    map.addSource("pearls", { type: "geojson", data: fc(
+      [{ type: "Feature", properties: { kind: "line" },
+         geometry: { type: "LineString", coordinates: (window.PEARLS || { line: [] }).line } }]
+      .concat(((window.PEARLS || {}).ports || []).map(function (p) {
+        return { type: "Feature", properties: { kind: "port", name: p.name },
+                 geometry: { type: "Point", coordinates: [p.lng, p.lat] } };
+      }))) });
+    map.addLayer({ id: "pearls-line", type: "line", source: "pearls",
+      filter: ["==", ["get", "kind"], "line"],
+      paint: { "line-color": "#E8E6DF", "line-width": 1, "line-dasharray": [1.4, 1.8], "line-opacity": 0.65 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "pearls-dot", type: "circle", source: "pearls",
+      filter: ["==", ["get", "kind"], "port"],
+      paint: { "circle-radius": 4, "circle-color": "#E8E6DF",
+        "circle-stroke-color": "#0B1020", "circle-stroke-width": 1.3 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "pearls-label", type: "symbol", source: "pearls",
+      filter: ["==", ["get", "kind"], "port"],
+      layout: { "text-field": ["get", "name"], "text-font": ["Open Sans Regular"],
+        "text-size": 10, "text-offset": [0, 1], "text-anchor": "top", visibility: "none" },
+      paint: { "text-color": "#E8E6DF", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
+
+    // Shatterbelts
+    map.addSource("shatterbelts", { type: "geojson", data: fc((window.SHATTERBELTS || []).map(function (z) {
+      return { type: "Feature", properties: { name: z.name },
+               geometry: { type: "Polygon", coordinates: z.coords } };
+    })) });
+    map.addLayer({ id: "shatter-fill", type: "fill", source: "shatterbelts",
+      paint: { "fill-color": "#C44569", "fill-opacity": 0.16 }, layout: { visibility: "none" } });
+    map.addLayer({ id: "shatter-line", type: "line", source: "shatterbelts",
+      paint: { "line-color": "#C44569", "line-width": 1.3, "line-dasharray": [2, 2], "line-opacity": 0.75 },
+      layout: { visibility: "none" } });
 
     // transparent always-on hit layer for clicks
     map.addLayer({ id: "countries-hit", type: "fill", source: "countries",
@@ -642,6 +730,62 @@
       .catch(function () { /* layer stays empty until the Action runs */ });
   }
 
+  /* live weather tiles (RainViewer, ~10-min updates, no key) */
+  function loadWeather() {
+    fetch("https://api.rainviewer.com/public/weather-maps.json")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var jobs = [
+          ["radar", (d.radar && d.radar.past || []).slice(-1)[0], "/256/{z}/{x}/{y}/2/1_1.png", 0.7],
+          ["clouds", (d.satellite && d.satellite.infrared || []).slice(-1)[0], "/256/{z}/{x}/{y}/0/0_0.png", 0.35]
+        ];
+        jobs.forEach(function (j) {
+          var id = "wx-" + j[0];
+          if (!j[1]) return;
+          var tiles = [d.host + j[1].path + j[2]];
+          if (map.getLayer(id)) map.removeLayer(id);
+          if (map.getSource(id)) map.removeSource(id);
+          map.addSource(id, { type: "raster", tiles: tiles, tileSize: 256,
+            attribution: "Weather: RainViewer" });
+          map.addLayer({ id: id, type: "raster", source: id,
+            paint: { "raster-opacity": j[3] },
+            layout: { visibility: state[j[0]] ? "visible" : "none" } },
+            map.getLayer("country-borders") ? "country-borders" : undefined);
+        });
+      }).catch(function () {});
+  }
+  setInterval(loadWeather, 600000);
+
+  /* ---- live precipitation radar (RainViewer, ~10-min frames) -------------- */
+  var radarTimer = null;
+  function loadRadar() {
+    fetch("https://api.rainviewer.com/public/weather-maps.json")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var frames = (d && d.radar && d.radar.past) || [];
+        if (!frames.length) return;
+        var f = frames[frames.length - 1];
+        var url = d.host + f.path + "/256/{z}/{x}/{y}/2/1_1.png";
+        if (map.getLayer("radar")) map.removeLayer("radar");
+        if (map.getSource("radar")) map.removeSource("radar");
+        map.addSource("radar", { type: "raster", tiles: [url], tileSize: 256,
+          attribution: "Radar: RainViewer" });
+        map.addLayer({ id: "radar", type: "raster", source: "radar",
+          paint: { "raster-opacity": 0.62 } }, "chokepoint-dot");
+        setVis("radar", state.radar);
+      })
+      .catch(function () {});
+  }
+  function setRadar(on) {
+    state.radar = on;
+    if (on) {
+      loadRadar();
+      if (!radarTimer) radarTimer = setInterval(function () { if (state.radar) loadRadar(); }, 10 * 60 * 1000);
+    } else if (map.getLayer("radar")) {
+      setVis("radar", false);
+    }
+  }
+
   /* ---- ally derivation: shared blocs + bilateral pacts -------------------- */
   function alliesOf(name) {
     var mil = {}, econ = {};
@@ -687,6 +831,23 @@
   }
   function clearAdversaries() {
     map.setFilter("ally-adv", ["==", ["get", "cname"], "___none___"]);
+  }
+  function setBaseFilter(layer, owners) {
+    var f = owners.length ? ["in", ["get", "owner"], ["literal", owners]]
+                          : ["==", ["get", "owner"], "___none___"];
+    map.setFilter(layer, f); map.setFilter(layer + "-label", f);
+  }
+  function showBases(name) {
+    var own = [name];
+    var allies = state.allymode ? alliesOf(name).mil : [];
+    var advs = state.advmode ? adversariesOf(name) : [];
+    allies = allies.filter(function (a) { return a !== name; });
+    setBaseFilter("bases-own", own);
+    setBaseFilter("bases-ally", allies);
+    setBaseFilter("bases-adv", advs);
+  }
+  function clearBases() {
+    ["bases-own", "bases-ally", "bases-adv"].forEach(function (l) { setBaseFilter(l, []); });
   }
 
   /* ---- control rail ----------------------------------------------------- */
@@ -755,41 +916,51 @@
         "Rings sized by 7-day avg daily transits, updated weekly.") +
 
       sec("signals", "Live signals — stack",
-        row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF"),
+        row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
+        row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF") +
+        row("chk", "clouds", "Cloud cover IR (live)", state.clouds, null, "#8A93A6"),
         "News-mention geography, refreshed every few hours. Noisy by nature.", false) +
 
       sec("theory", "Classical theory",
         row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
-        row("chk", "rimland", "Spykman Rimland + offshore", state.rimland, null, "#C8B08A")) +
+        row("chk", "rimland", "Spykman Rimland + offshore", state.rimland, null, "#C8B08A") +
+        row("chk", "islandchains", "Island Chains (1st–3rd)", state.islandchains, null, "#5BC8FF") +
+        row("chk", "pearls", "String of Pearls", state.pearls, null, "#E8E6DF") +
+        row("chk", "shatter", "Shatterbelts (Cohen)", state.shatter, null, "#C44569")) +
 
       sec("status", "Status — stack",
-        row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A")) +
+        row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A") +
+        '<p class="hint">Solid border = intercontinental reach; dashed = regional. Green = thermonuclear; lime = fission-only. Labels show est. warheads.</p>') +
 
       sec("interact", "Interaction",
         row("chk", "allymode", "Ally highlight on click", state.allymode, null, "#FFD633") +
-        row("chk", "advmode", "Adversary highlight on click", state.advmode, null, "#FF4D4D"),
+        row("chk", "advmode", "Adversary highlight on click", state.advmode, null, "#FF4D4D") +
+        row("chk", "basesmode", "Military bases on click", state.basesmode, null, "#FFD633"),
         "Click a country: military allies blue, economic green, adversaries red.") +
 
       sec("ref", "Reference — stack",
         row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D")) +
-      '<p class="hint" style="margin-top:12px">Data: Natural Earth · World Bank (CC BY-4.0) · UCDP · IMF PortWatch · OSM/CARTO · AWS Terrain. Conflict synopses: sources per entry.</p>';
+      '<p class="hint" style="margin-top:12px">Data: Natural Earth \u00B7 RainViewer \u00B7 Open-Meteo · World Bank (CC BY-4.0) · UCDP · IMF PortWatch · OSM/CARTO · AWS Terrain. Conflict synopses: sources per entry.</p>';
 
     byId("btn-reset").onclick = function () {
       state.fill = "none"; state.stat = "none";
       ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
-       "newspulse","lanes","portwatch","bri","allymode","advmode"].forEach(function (k) { state[k] = false; });
+       "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds"].forEach(function (k) { state[k] = false; });
       BLOCS.forEach(function (b) { state[b.key] = false; });
       applyFill(); switchStat("none");
       [["hillshade",["hillshade"]],["heat",["conflict-heat"]],
        ["heartland",["zone-heartland-fill","zone-heartland-line"]],
        ["rimland",["rimland-fill","rimland-line","offshore-fill","offshore-line"]],
-       ["nuclear",["nuclear-fill","nuclear-line"]],
+       ["nuclear",["nuclear-fill","nuclear-line-icbm","nuclear-line-reg","nuclear-label"]],
+       ["islandchains",["islandchains-line"]],["pearls",["pearls-line","pearls-dot","pearls-label"]],
+       ["shatter",["shatter-fill","shatter-line"]],
+       ["radar",["wx-radar"]],["clouds",["wx-clouds"]],
        ["chokepoints",["chokepoint-dot","chokepoint-label"]],
        ["newspulse",["newspulse"]],["lanes",["lanes-glow","lanes-core"]],
        ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-line"]]
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
       BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
-      clearAllies(); clearAdversaries();
+      clearAllies(); clearAdversaries(); clearBases(); setRadar(false);
       buildRail(); updateLegend(); tele();
     };
 
@@ -814,6 +985,9 @@
     });
     byId("cb-heat").onchange = function (e) { state.heat = e.target.checked; setVis("conflict-heat", state.heat); tele(); };
     byId("cb-newspulse").onchange = function (e) { state.newspulse = e.target.checked; setVis("newspulse", state.newspulse); tele(); };
+    byId("cb-radar").onchange = function (e) { setRadar(e.target.checked); tele(); };
+    byId("cb-radar").onchange = function (e) { state.radar = e.target.checked; setVis("wx-radar", state.radar); tele(); };
+    byId("cb-clouds").onchange = function (e) { state.clouds = e.target.checked; setVis("wx-clouds", state.clouds); tele(); };
     byId("cb-heartland").onchange = function (e) {
       state.heartland = e.target.checked;
       setVis("zone-heartland-fill", state.heartland); setVis("zone-heartland-line", state.heartland); tele();
@@ -825,7 +999,21 @@
     };
     byId("cb-nuclear").onchange = function (e) {
       state.nuclear = e.target.checked;
-      setVis("nuclear-fill", state.nuclear); setVis("nuclear-line", state.nuclear); tele();
+      ["nuclear-fill","nuclear-line-icbm","nuclear-line-reg","nuclear-label"]
+        .forEach(function (id) { setVis(id, state.nuclear); });
+      tele();
+    };
+    byId("cb-islandchains").onchange = function (e) {
+      state.islandchains = e.target.checked; setVis("islandchains-line", state.islandchains); tele();
+    };
+    byId("cb-pearls").onchange = function (e) {
+      state.pearls = e.target.checked;
+      ["pearls-line","pearls-dot","pearls-label"].forEach(function (id) { setVis(id, state.pearls); });
+      tele();
+    };
+    byId("cb-shatter").onchange = function (e) {
+      state.shatter = e.target.checked;
+      setVis("shatter-fill", state.shatter); setVis("shatter-line", state.shatter); tele();
     };
     byId("cb-lanes").onchange = function (e) {
       state.lanes = e.target.checked;
@@ -846,6 +1034,11 @@
     byId("cb-advmode").onchange = function (e) {
       state.advmode = e.target.checked;
       if (!state.advmode) clearAdversaries();
+      tele();
+    };
+    byId("cb-basesmode").onchange = function (e) {
+      state.basesmode = e.target.checked;
+      if (!state.basesmode) clearBases();
       tele();
     };
     byId("cb-chokepoints").onchange = function (e) {
@@ -895,7 +1088,8 @@
             (state.hillshade ? 1 : 0) + (state.heat ? 1 : 0) +
             (state.heartland ? 1 : 0) + (state.rimland ? 1 : 0) + (state.nuclear ? 1 : 0) +
             (state.chokepoints ? 1 : 0) + (state.newspulse ? 1 : 0) +
-            (state.lanes ? 1 : 0) + (state.portwatch ? 1 : 0) + (state.bri ? 1 : 0);
+            (state.lanes ? 1 : 0) + (state.portwatch ? 1 : 0) + (state.bri ? 1 : 0) +
+            (state.radar ? 1 : 0) + (state.clouds ? 1 : 0);
     BLOCS.forEach(function (b) { if (state[b.key]) n++; });
     byId("t-layers").textContent = n;
   }
@@ -907,11 +1101,40 @@
       showCard(p);
       if (state.allymode) showAllies(p.cname);
       if (state.advmode) showAdversaries(p.cname);
+      if (state.basesmode) showBases(p.cname);
     });
     map.on("mouseenter", "countries-hit", function () { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "countries-hit", function () { map.getCanvas().style.cursor = ""; });
 
     byId("card-close").onclick = function () { byId("card").classList.remove("show"); };
+
+    var rt = byId("rail-toggle");
+    if (rt) rt.onclick = function () { byId("rail").classList.toggle("hidden"); };
+
+    (function () {
+      try {
+        var owner = location.hostname.split(".")[0];
+        var repo = location.pathname.split("/").filter(Boolean)[0];
+        if (!owner || !repo) return;
+        fetch("https://api.github.com/repos/" + owner + "/" + repo + "/commits?per_page=1")
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            var dt = d && d[0] && d[0].commit && d[0].commit.committer.date;
+            if (dt) byId("t-upd").textContent = dt.slice(0, 10);
+          }).catch(function () {});
+      } catch (e) {}
+    })();
+
+    var tp = byId("t-proj");
+    if (tp) tp.onclick = function () {
+      state.flat = !state.flat;
+      try {
+        map.setProjection({ type: state.flat ? "mercator" : "globe" });
+        if (map.setRenderWorldCopies) map.setRenderWorldCopies(state.flat);
+      } catch (err) { console.error(err); }
+      tp.textContent = state.flat ? "GLOBE ◯" : "FLAT ▭";
+      tp.classList.toggle("on", state.flat);
+    };
 
     // auto-spin
     var spinning = false, raf = null;
@@ -964,6 +1187,15 @@
         (st.trade !== undefined ? " &middot; Trade bal " + (st.trade > 0 ? "+" : "") + st.trade.toFixed(1) + "% GDP" : "") +
         (st.tradeusd !== undefined ? " (" + (st.tradeusd < 0 ? "&minus;" : "+") + fmtUSD(Math.abs(st.tradeusd)) + "/yr)" : "")
       : "—");
+    var ni = (window.NUCLEAR_INFO || {})[p.cname];
+    if (ni) {
+      var cur = byId("card-role");
+      if (cur) cur.innerHTML = (ROLE_LABEL[p.role] || "&mdash;") +
+        "<br><span style='color:#3FE08A'>Nuclear: &asymp;" + ni.wh + " warheads &middot; " +
+        (ni.icbm ? "intercontinental" : "regional") + " &middot; " +
+        (ni.h ? "thermonuclear" : "fission") + "</span>";
+    }
+
     var confs = (window.CONFLICTS || []).filter(function (cf) {
       return cf.parties.indexOf(p.cname) >= 0;
     });
@@ -977,6 +1209,24 @@
     if (wb) {
       if (st.iso3) { wb.href = "https://data.worldbank.org/country/" + st.iso3; wb.style.display = "inline-block"; }
       else { wb.style.display = "none"; }
+    }
+    var wx = byId("card-wx");
+    if (wx) {
+      wx.textContent = "\u2026";
+      var pt = COUNTRY_POINTS_GEO && COUNTRY_POINTS_GEO.features.filter(function (f) {
+        return f.properties.cname === p.cname;
+      })[0];
+      if (pt) {
+        var c = pt.geometry.coordinates;
+        fetch("https://api.open-meteo.com/v1/forecast?latitude=" + c[1].toFixed(2) +
+              "&longitude=" + c[0].toFixed(2) + "&current=temperature_2m,wind_speed_10m")
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            var cu = d && d.current;
+            wx.textContent = cu ? Math.round(cu.temperature_2m) + "\u00B0C \u00B7 wind " +
+              Math.round(cu.wind_speed_10m) + " km/h (centroid)" : "\u2014";
+          }).catch(function () { wx.textContent = "\u2014"; });
+      } else { wx.textContent = "\u2014"; }
     }
     var card = byId("card"); if (card) card.classList.add("show");
   }

@@ -207,3 +207,17 @@ window.NAME_ALIASES = {
   "eSwatini": ["Swaziland","Eswatini"],
   "Palestine": ["West Bank","Palestinian Territories"]
 };
+
+/* ---- NUCLEAR ARSENAL DETAIL (FAS-style estimates, editable) ----------------
+   wh: est. total warheads · icbm: intercontinental-range delivery · h: thermonuclear */
+window.NUCLEAR_INFO = {
+  "Russia":         { wh: 5580, icbm: true,  h: true  },
+  "United States":  { wh: 5044, icbm: true,  h: true  },
+  "China":          { wh: 600,  icbm: true,  h: true  },
+  "France":         { wh: 290,  icbm: true,  h: true  },
+  "United Kingdom": { wh: 225,  icbm: true,  h: true  },
+  "India":          { wh: 172,  icbm: true,  h: true  },  // thermonuclear claim contested
+  "Pakistan":       { wh: 170,  icbm: false, h: false },
+  "Israel":         { wh: 90,   icbm: false, h: false }, // undeclared; capabilities unconfirmed
+  "North Korea":    { wh: 50,   icbm: true,  h: true  }  // claimed thermonuclear (2017 test)
+};
