@@ -187,10 +187,10 @@
 
   /* ---- state ------------------------------------------------------------ */
   var state = {
-    hillshade: true, fill: "tier", stat: "none",
+    hillshade: true, fill: "tier", stat: "none", statMode: "ring",
     heat: true, heartland: false, rimland: false, nuclear: false,
     chokepoints: true, newspulse: false, lanes: false, portwatch: false, bri: false,
-    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false, radar: false, clouds: false, deltas: false, terrain3d: false
+    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
   (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
@@ -559,13 +559,14 @@
         "text-size": 10, "text-offset": [0, 0.9], "text-anchor": "top", visibility: "none" },
       paint: { "text-color": "#E8C98A", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
 
-    // numeric labels under stat circles
+    // numeric labels for stats (rings + choropleth share the same labels)
     map.addLayer({ id: "stat-labels", type: "symbol", source: "country-points",
-      filter: [">", ["get", "r"], 0],
+      filter: ["all", [">", ["get", "r"], 0], ["!=", ["get", "lbl"], ""]],
       layout: { "text-field": ["get", "lbl"], "text-font": ["Open Sans Regular"],
-        "text-size": 10, "text-offset": [0, 0.6], "text-anchor": "top",
-        "text-allow-overlap": false, visibility: "none" },
-      paint: { "text-color": "#F0B450", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
+        "text-size": 10.5, "text-offset": [0, 0.7], "text-anchor": "top",
+        "text-allow-overlap": false, "text-letter-spacing": 0.02,
+        visibility: "none" },
+      paint: { "text-color": "#FFE2A8", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
 
     // conflict heatmap
     map.addLayer({ id: "conflict-heat", type: "heatmap", source: "conflict",
@@ -582,12 +583,38 @@
         "heatmap-opacity": 0.7
       }, layout: { visibility: "visible" } });
 
-    // proportional statistic circles (World Bank), one metric at a time
+    // proportional statistic rings (World Bank), one metric at a time —
+    // hollow amber outlines so they float over any active country fill.
     map.addLayer({ id: "stat-circles", type: "circle", source: "country-points",
       paint: { "circle-radius": ["get", "r"],
-        "circle-color": "#E8A33D", "circle-opacity": 0.18,
-        "circle-stroke-color": "#F0B450", "circle-stroke-width": 1, "circle-stroke-opacity": 0.75 },
+        "circle-color": "#E8A33D", "circle-opacity": 0.05,
+        "circle-stroke-color": "#E8A33D", "circle-stroke-width": 2,
+        "circle-stroke-opacity": 0.9 },
       layout: { visibility: "none" } });
+
+    // per-statistic choropleth fills (active when statMode === "fill"). These
+    // sit above the global Country fill layers so the user can switch from
+    // floating rings to a clean full-country view of the same metric.
+    var STAT_RAMPS = {
+      pop: ["interpolate", ["linear"], ["get", "pop"],
+        0, "#1E2A40", 5e6, "#2E5F66", 5e7, "#4DA38A", 2e8, "#E8A33D", 1.4e9, "#FFD633"],
+      gdp: ["interpolate", ["linear"], ["get", "gdp"],
+        0, "#1E2A40", 1e11, "#2E5F66", 1e12, "#4DA38A", 5e12, "#E8A33D", 2.5e13, "#FFD633"],
+      gdppc: ["interpolate", ["linear"], ["get", "gdppc"],
+        0, "#1E2A40", 2000, "#2E5F66", 12000, "#4DA38A", 40000, "#E8A33D", 90000, "#FFD633"],
+      milex: ["interpolate", ["linear"], ["get", "milex"],
+        0, "#3B4D63", 1e9, "#8A7245", 1e10, "#C28A35", 6e10, "#E89A3D", 3e11, "#FF9A4D", 9e11, "#FFD633"],
+      milper: ["interpolate", ["linear"], ["get", "milper"],
+        0, "#1E2A40", 50000, "#5B4A22", 250000, "#C28A2A", 1e6, "#F0A83C", 3e6, "#FFD633"],
+      renew: ["interpolate", ["linear"], ["get", "renew"],
+        0, "#58708F", 25, "#46946E", 50, "#3AB374", 75, "#3FD685", 100, "#7CFFB0"]
+    };
+    Object.keys(STAT_RAMPS).forEach(function (m) {
+      map.addLayer({ id: "fill-stat-" + m, type: "fill", source: "countries",
+        paint: { "fill-color": STAT_RAMPS[m], "fill-opacity": 0.62 },
+        layout: { visibility: "none" } },
+        map.getLayer("country-borders") ? "country-borders" : undefined);
+    });
 
     // chokepoints
     map.addLayer({ id: "chokepoint-dot", type: "circle", source: "chokepoints",
@@ -814,17 +841,28 @@
     if (metric === "gdp" || metric === "gdppc" || metric === "milex") return fmtUSD(v);
     return fmtNum(v);
   }
+  var STAT_METRICS = ["pop", "gdp", "gdppc", "milex", "milper", "renew"];
+  function applyStatRender() {
+    var on = state.stat !== "none";
+    var ringMode = on && state.statMode === "ring";
+    setVis("stat-circles", ringMode);
+    setVis("stat-labels", on);   // labels stay on in both modes
+    STAT_METRICS.forEach(function (m) {
+      setVis("fill-stat-" + m, on && state.statMode === "fill" && state.stat === m);
+    });
+  }
   function switchStat(metric) {
     state.stat = metric;
-    if (metric === "none") { setVis("stat-circles", false); setVis("stat-labels", false); tele(); return; }
+    if (metric === "none") { applyStatRender(); tele(); return; }
     var max = statMax(metric);
     COUNTRY_POINTS_GEO.features.forEach(function (f) {
       var v = f.properties[metric] || 0;
-      f.properties.r = (v > 0 && max > 0) ? Math.sqrt(v / max) * 30 + 2 : 0;
+      // Smaller cap (≈22px) so rings read as accents, not blobs.
+      f.properties.r = (v > 0 && max > 0) ? Math.sqrt(v / max) * 20 + 2 : 0;
       f.properties.lbl = statLabel(metric, v);
     });
     var s = map.getSource("country-points"); if (s) s.setData(COUNTRY_POINTS_GEO);
-    setVis("stat-circles", true); setVis("stat-labels", true);
+    applyStatRender();
     tele();
   }
   function rebuildStats() {
@@ -1113,13 +1151,17 @@
 
       sec("stats", "Country statistics — choose one",
         row("rad", "stat-none", "None", state.stat === "none", "statgrp") +
-        row("rad", "stat-pop", "Population", state.stat === "pop", "statgrp") +
         row("rad", "stat-gdp", "GDP", state.stat === "gdp", "statgrp") +
         row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp") +
         row("rad", "stat-milex", "Military spending", state.stat === "milex", "statgrp") +
         row("rad", "stat-milper", "Military personnel", state.stat === "milper", "statgrp") +
-        row("rad", "stat-renew", "Renewables %", state.stat === "renew", "statgrp"),
-        "Sized circles, World Bank latest. Combine with any fill.") +
+        row("rad", "stat-pop", "Population", state.stat === "pop", "statgrp") +
+        row("rad", "stat-renew", "Renewables %", state.stat === "renew", "statgrp") +
+        '<div class="statmode">' +
+          row("chk", "statmode-fill", "Render as country fill (choropleth)",
+              state.statMode === "fill", null, "#E8A33D") +
+        '</div>',
+        "Default: hollow amber rings over the active fill. Toggle to repaint the active stat as a choropleth.") +
 
       sec("def", "Defense &amp; security — stack", defBlocs, null, false) +
       sec("eco", "Economic &amp; political — stack", ecoBlocs, null, false) +
@@ -1170,7 +1212,7 @@
       '<p class="hint" style="margin-top:12px">Data: Natural Earth \u00B7 RainViewer \u00B7 Open-Meteo · World Bank (CC BY-4.0) · UCDP · IMF PortWatch · OSM/CARTO · AWS Terrain. Conflict synopses: sources per entry.</p>';
 
     byId("btn-reset").onclick = function () {
-      state.fill = "none"; state.stat = "none";
+      state.fill = "none"; state.stat = "none"; state.statMode = "ring";
       ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
        "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas","terrain3d"].forEach(function (k) { state[k] = false; });
       BLOCS.forEach(function (b) { state[b.key] = false; });
@@ -1218,6 +1260,10 @@
     ["none", "pop", "gdp", "gdppc", "milex", "milper", "renew"].forEach(function (m) {
       byId("cb-stat-" + m).onchange = function (e) { if (e.target.checked) switchStat(m); };
     });
+    byId("cb-statmode-fill").onchange = function (e) {
+      state.statMode = e.target.checked ? "fill" : "ring";
+      applyStatRender(); updateLegend(); tele();
+    };
     BLOCS.forEach(function (b) {
       byId("cb-" + b.key).onchange = function (e) { state[b.key] = e.target.checked; setVis("bloc-" + b.key, state[b.key]); tele(); };
     });

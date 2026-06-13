@@ -116,6 +116,12 @@ html, body {
 .row .swatch { width: 11px; height: 11px; border-radius: 3px; flex: 0 0 auto; }
 .row .label { flex: 1; }
 
+/* paint-as-fill toggle row for stats — sits as a small footer under the stat
+   radios with a hairline divider so it reads as a mode switch, not a stat. */
+.rail .statmode {
+  margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--hairline);
+}
+
 /* legend chips under a fill group */
 .legend { display: flex; flex-wrap: wrap; gap: 5px 10px; padding: 4px 6px 2px; }
 .legend span {
