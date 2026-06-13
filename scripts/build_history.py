@@ -49,9 +49,13 @@ def main():
                 try:
                     raw[key], world[key] = fetch_year(code, year)
                     ok += 1
+                    print(year, key, "OK via", code,
+                          "(%d countries)" % len(raw[key]))
                     break
                 except Exception as e:
                     print(year, key, code, "failed:", e)
+            else:
+                print(year, key, "ALL candidates failed:", codes)
         out = {}
         for iso3, name in NAME_BY_ISO3.items():
             shares = []

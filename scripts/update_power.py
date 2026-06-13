@@ -121,9 +121,13 @@ def main():
             try:
                 raw[key], world[key] = fetch_indicator(code)
                 ok += 1
+                print("indicator", key, "OK via", code,
+                      "(%d countries)" % len(raw[key]))
                 break
             except Exception as e:
                 print("indicator", key, "code", code, "failed:", e)
+        else:
+            print("indicator", key, "ALL candidates failed:", codes)
     if ok == 0:
         print("All indicator fetches failed — leaving existing file untouched.")
         sys.exit(0)
