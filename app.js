@@ -43,7 +43,8 @@
 
   var COUNTRIES_GEO = null;   // decorated polygons, kept so live data can update them
   var COUNTRY_POINTS_GEO = null; // one point per country for proportional-symbol stats
-  var POWER_BY_NAME = {};     // World Bank stats + composite, keyed by country name
+  var POWER_BY_NAME = {};
+  var VDEM = null; // {year:{name:score0-100}}     // World Bank stats + composite, keyed by country name
   function powerOf(name) {
     var v = POWER_BY_NAME[name];
     if (typeof v === "number") return { composite: v };  // tolerate old file shape
@@ -184,6 +185,7 @@
     allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false, radar: false, clouds: false, deltas: false, terrain3d: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
+  (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
 
   function setVis(id, on) {
     if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", on ? "visible" : "none");
@@ -216,6 +218,10 @@
         refreshPower();
         refreshNewspulse();
         refreshPortwatch();
+        fetch("data/vdem.json", { cache: "no-store" })
+          .then(function (r) { if (r.ok) return r.json(); throw 0; })
+          .then(function (d) { VDEM = d; applyYear(); })
+          .catch(function () {});
         loadWeather();
         buildRail();
         wireInteraction();
@@ -282,6 +288,9 @@
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
       f.properties.relig = (window.RELIGION || {})[f.properties.cname] || "none";
       f.properties.trader = (window.TRADE_PARTNER || {})[f.properties.cname] || "none";
+      var vy = VDEM && (VDEM[String(Math.min(CUR_YEAR, 2025))] || VDEM[String(CUR_YEAR - 1)]);
+      f.properties.vdem = (vy && vy[f.properties.cname] !== undefined) ? vy[f.properties.cname] : -1;
+      f.properties.usbase = (window.USBASE_HOSTS || []).indexOf(f.properties.cname) >= 0;
       f.properties.offshore = !!(key && listSet(window.RIMLAND_OFFSHORE)[key]);
       var cfs = conflictsAt(f.properties.cname, CUR_YEAR);
       f.properties.conflict = cfs.length ? cfs[0].type : "";
@@ -411,6 +420,19 @@
     map.addLayer({ id: "fill-trader", type: "fill", source: "countries",
       paint: { "fill-color": ["match", ["get", "trader"],
         "us", "#4DA3FF", "china", "#FF4D4D", "#222C3B"], "fill-opacity": 0.6 },
+      layout: { visibility: "none" } });
+
+    // V-Dem liberal democracy index (0-100)
+    map.addLayer({ id: "fill-vdem", type: "fill", source: "countries",
+      paint: { "fill-color": ["interpolate", ["linear"], ["get", "vdem"],
+        -1, "#222C3B", 0, "#8E2F4F", 25, "#C2552E", 50, "#C9A227", 75, "#4E9E6E", 100, "#3FE08A"],
+        "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // US military footprint: host countries + base points
+    map.addLayer({ id: "fill-usbases", type: "fill", source: "countries",
+      filter: ["==", ["get", "usbase"], true],
+      paint: { "fill-color": "#C0392B", "fill-opacity": 0.45 },
       layout: { visibility: "none" } });
 
     // active conflicts fill
@@ -688,6 +710,24 @@
       paint: { "line-color": "#C44569", "line-width": 1.3, "line-dasharray": [2, 2], "line-opacity": 0.75 },
       layout: { visibility: "none" } });
 
+    // natural resource deposits
+    map.addSource("resources", { type: "geojson", data: fc((window.RESOURCES || []).map(function (r) {
+      return { type: "Feature", properties: { rtype: r.type, name: r.name },
+               geometry: { type: "Point", coordinates: [r.lng, r.lat] } };
+    })) });
+    (window.RESOURCE_TYPES || []).forEach(function (t) {
+      map.addLayer({ id: "res-" + t[0], type: "circle", source: "resources",
+        filter: ["==", ["get", "rtype"], t[0]],
+        paint: { "circle-radius": 4.5, "circle-color": t[2],
+          "circle-stroke-color": "#0B1020", "circle-stroke-width": 1.3 },
+        layout: { visibility: "none" } });
+      map.addLayer({ id: "res-" + t[0] + "-label", type: "symbol", source: "resources",
+        filter: ["==", ["get", "rtype"], t[0]], minzoom: 2.5,
+        layout: { "text-field": ["get", "name"], "text-font": ["Open Sans Regular"],
+          "text-size": 9.5, "text-offset": [0, 0.9], "text-anchor": "top", visibility: "none" },
+        paint: { "text-color": t[2], "text-halo-color": "#0B1020", "text-halo-width": 1.2 } });
+    });
+
     // transparent always-on hit layer for clicks
     map.addLayer({ id: "countries-hit", type: "fill", source: "countries",
       paint: { "fill-color": "#000", "fill-opacity": 0 } });
@@ -706,6 +746,13 @@
     setVis("fill-religion", state.fill === "religion");
     setVis("fill-conflict", state.fill === "conflict");
     setVis("fill-trader", state.fill === "trader");
+    setVis("fill-vdem", state.fill === "vdem");
+    setVis("fill-usbases", state.fill === "usbases");
+    ["bases-own"].forEach(function (l) {
+      if (state.fill === "usbases") {
+        setBaseFilter("bases-own", ["United States"]);
+      } else if (!state.basesmode) { setBaseFilter("bases-own", []); }
+    });
   }
 
   /* swap the sample heat points for the live UCDP file once it exists in /data.
@@ -829,7 +876,17 @@
 
   /* ---- temporal: load a historical World Bank year ------------------------ */
   var HIST_CACHE = {};
+  function loadPortwatchYear(y) {
+    if (y >= 2026) { refreshPortwatch(); return; }
+    fetch("data/history/portwatch-" + y + ".json", { cache: "force-cache" })
+      .then(function (r) { if (r.ok) return r.json(); throw 0; })
+      .then(function (d) { var s2 = map.getSource("portwatch"); if (s2) s2.setData(d); })
+      .catch(function () {
+        var s2 = map.getSource("portwatch"); if (s2) s2.setData(fc([]));
+      });
+  }
   function applyYear() {
+    loadPortwatchYear(CUR_YEAR);
     decorate(COUNTRIES_GEO);
     var src = map.getSource("countries"); if (src) src.setData(COUNTRIES_GEO);
     rebuildStats(); clearAllies(); clearAdversaries(); clearBases(); updateLegend();
@@ -1041,6 +1098,8 @@
         row("rad", "fill-religion", "Majority religion", state.fill === "religion", "fillgrp") +
         row("rad", "fill-conflict", "Active conflicts", state.fill === "conflict", "fillgrp") +
         row("rad", "fill-trader", "Top trade partner: US/China", state.fill === "trader", "fillgrp") +
+        row("rad", "fill-vdem", "Liberal democracy (V-Dem)", state.fill === "vdem", "fillgrp") +
+        row("rad", "fill-usbases", "US military footprint", state.fill === "usbases", "fillgrp") +
         '<div class="legend" id="legend"></div>',
         "Only one can paint the countries at a time.") +
 
@@ -1082,6 +1141,12 @@
         row("chk", "shatter", "Shatterbelts (Cohen)", state.shatter, null, "#C44569") +
         row("chk", "deltas", "River deltas (Marshall)", state.deltas, null, "#49C5B6")) +
 
+      sec("resources", "Natural resources — stack",
+        (window.RESOURCE_TYPES || []).map(function (t) {
+          return row("chk", "res" + t[0], t[1], state["res" + t[0]], null, t[2]);
+        }).join("") +
+        '<p class="hint">Major deposits/basins (editorial). Geology: constant across YEAR.</p>', null, false) +
+
       sec("status", "Status — stack",
         row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A") +
         '<p class="hint">Solid border = intercontinental reach; dashed = regional. Green = thermonuclear; lime = fission-only. Labels show est. warheads.</p>') +
@@ -1101,6 +1166,7 @@
       ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
        "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas","terrain3d"].forEach(function (k) { state[k] = false; });
       BLOCS.forEach(function (b) { state[b.key] = false; });
+  (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
       applyFill(); switchStat("none");
       [["hillshade",["hillshade"]],["heat",["conflict-heat"]],
        ["heartland",["zone-heartland-fill","zone-heartland-line"]],
@@ -1114,6 +1180,9 @@
        ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]]
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
       BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
+      (window.RESOURCE_TYPES || []).forEach(function (t) {
+        state["res" + t[0]] = false; setVis("res-" + t[0], false); setVis("res-" + t[0] + "-label", false);
+      });
       clearAllies(); clearAdversaries(); clearBases(); setRadar(false); setClouds(false); try { map.setTerrain(null); } catch (e) {}
       buildRail(); updateLegend(); tele();
     };
@@ -1135,7 +1204,7 @@
       tele();
     };
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader"].forEach(function (v) {
+    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader", "vdem", "usbases"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
     });
     ["none", "pop", "gdp", "gdppc", "milex", "milper", "renew"].forEach(function (m) {
@@ -1159,6 +1228,13 @@
       setVis("rimland-fill", state.rimland); setVis("rimland-line", state.rimland);
       setVis("offshore-fill", state.rimland); setVis("offshore-line", state.rimland); tele();
     };
+    (window.RESOURCE_TYPES || []).forEach(function (t) {
+      byId("cb-res" + t[0]).onchange = function (e) {
+        state["res" + t[0]] = e.target.checked;
+        setVis("res-" + t[0], e.target.checked); setVis("res-" + t[0] + "-label", e.target.checked);
+        tele();
+      };
+    });
     byId("cb-nuclear").onchange = function (e) {
       state.nuclear = e.target.checked;
       ["nuclear-fill","nuclear-line-icbm","nuclear-line-reg","nuclear-label"]
@@ -1230,6 +1306,8 @@
     if (state.fill === "tier" || state.fill === "role") return "Editorial, 2026 snapshot";
     if (state.fill === "religion") return "Editorial, ~2024 estimates";
     if (state.fill === "trader") return "Editorial, 2024-25 trade pattern (not year-adjusted)";
+    if (state.fill === "vdem") return "V-Dem v2x_libdem via OWID (CC BY), year " + Math.min(CUR_YEAR, 2025);
+    if (state.fill === "usbases") return "After Vine (2021) / IBON (2025): 742 bases, 82 hosts. Dots = curated majors. 2026 snapshot";
     if (state.fill === "conflict") return (window.CONFLICTS_VINTAGE || "Editorial") + " \u00B7 era-bounded by YEAR";
     return "";
   }
@@ -1250,6 +1328,10 @@
       ? [["Equal 25", "#4E88A6"], ["40", "#E8843D"], ["Unequal 55", "#E84393"]]
       : state.fill === "trade"
       ? [["Deficit", "#E84393"], ["0", "#3B5266"], ["Surplus", "#3FE08A"]]
+      : state.fill === "vdem"
+      ? [["0", "#8E2F4F"], ["50", "#C9A227"], ["100", "#3FE08A"]]
+      : state.fill === "usbases"
+      ? [["Hosts US bases/installations", "#C0392B"]]
       : state.fill === "trader"
       ? [["US-led", "#4DA3FF"], ["China-led", "#FF4D4D"]]
       : state.fill === "conflict"
@@ -1386,7 +1468,8 @@
 
     var confs = conflictsAt(p.cname, CUR_YEAR);
     setHTML("card-conflict", confs.length ? confs.map(function (cf) {
-      return "<b>" + cf.name + "</b> (" + cf.type + ", since " + cf.since + ")<br>" +
+      return "<b>" + cf.name + "</b> (" + cf.type + ", " + cf.since +
+             (cf.untilY ? "&ndash;" + cf.untilY : "&ndash;ongoing") + ")<br>" +
              cf.cause + "<br>" + cf.casualties +
              "<br><i>Source: " + cf.source + "</i>";
     }).join("<hr>") : "—");

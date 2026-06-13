@@ -75,5 +75,67 @@ def main():
         print(year, ":", len(out), "countries,", ok, "indicators")
 
 
+def portwatch_history():
+    """Yearly avg daily transits per chokepoint -> data/history/portwatch-YYYY.json
+    (PortWatch data begins 2019)."""
+    import urllib.parse
+    from collections import defaultdict
+    base = ("https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/")
+    locq = base + "PortWatch_chokepoints_database/FeatureServer/0/query"
+    datq = base + "Daily_Chokepoints_Data/FeatureServer/0/query"
+    try:
+        loc = get(locq + "?" + urllib.parse.urlencode({
+            "where": "1=1", "outFields": "portid,portname",
+            "returnGeometry": "true", "outSR": "4326", "f": "json"}))
+    except Exception as e:
+        print("portwatch locations failed:", e)
+        return
+    coords = {}
+    for f in loc.get("features") or []:
+        a, g = f.get("attributes") or {}, f.get("geometry") or {}
+        if a.get("portid") and g.get("x") is not None:
+            coords[a["portid"]] = (g["x"], g["y"], a.get("portname") or a["portid"])
+    for year in range(2019, 2026):
+        sums = defaultdict(lambda: [0.0, 0])
+        offset = 0
+        while True:
+            try:
+                d = get(datq + "?" + urllib.parse.urlencode({
+                    "where": "year = %d" % year,
+                    "outFields": "portid,n_total", "f": "json",
+                    "returnGeometry": "false",
+                    "resultRecordCount": "2000", "resultOffset": str(offset)}))
+            except Exception as e:
+                print(year, "portwatch query failed:", e)
+                break
+            feats = d.get("features") or []
+            for f in feats:
+                a = f.get("attributes") or {}
+                pid, c = a.get("portid"), a.get("n_total")
+                if pid is None or c is None:
+                    continue
+                sums[pid][0] += float(c)
+                sums[pid][1] += 1
+            if len(feats) < 2000:
+                break
+            offset += 2000
+        out = []
+        for pid, sc in sums.items():
+            if pid not in coords or not sc[1]:
+                continue
+            x, y, name = coords[pid]
+            out.append({"type": "Feature",
+                        "properties": {"name": name, "calls": round(sc[0] / sc[1], 1)},
+                        "geometry": {"type": "Point",
+                                     "coordinates": [round(x, 3), round(y, 3)]}})
+        if out:
+            path = os.path.join(OUTDIR, "portwatch-%d.json" % year)
+            with open(path, "w") as f:
+                json.dump({"type": "FeatureCollection", "features": out}, f,
+                          separators=(",", ":"))
+            print("portwatch", year, ":", len(out), "chokepoints")
+
+
 if __name__ == "__main__":
     main()
+    portwatch_history()
