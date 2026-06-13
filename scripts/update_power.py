@@ -76,7 +76,15 @@ NAME_BY_ISO3 = {
     "IDN": "Indonesia", "PHL": "Philippines", "BRN": "Brunei", "TLS": "Timor-Leste",
     # Oceania
     "AUS": "Australia", "NZL": "New Zealand", "PNG": "Papua New Guinea", "FJI": "Fiji",
-    "SLB": "Solomon Is.",
+    "SLB": "Solomon Is.", "VUT": "Vanuatu",
+    # small states (visible at 50m resolution)
+    "ATG": "Antigua and Barb.", "BRB": "Barbados", "DMA": "Dominica",
+    "GRD": "Grenada", "KNA": "St. Kitts and Nevis", "LCA": "Saint Lucia",
+    "VCT": "St. Vin. and Gren.", "SYC": "Seychelles", "COM": "Comoros",
+    "MDV": "Maldives", "STP": "São Tomé and Principe", "WSM": "Samoa",
+    "TON": "Tonga", "KIR": "Kiribati", "FSM": "Micronesia",
+    "MHL": "Marshall Is.", "PLW": "Palau", "AND": "Andorra",
+    "LIE": "Liechtenstein", "MCO": "Monaco", "SMR": "San Marino",
 }
 
 

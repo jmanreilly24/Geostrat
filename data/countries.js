@@ -135,7 +135,7 @@ window.NUCLEAR = [
 /* ---- ALLY DERIVATION (used by "Ally highlight on click") ------------------
    Allies = everyone sharing a bloc listed here, plus bilateral pairs below.  */
 window.ALLIANCE_CONFIG = {
-  military: ["nato","csto","aukus","fiveEyes","quad"], // SCO excluded: forum, not a defense pact
+  military: ["nato","csto","aukus","fiveEyes"], // SCO & QUAD excluded: forums/dialogues, not defense pacts
   economic: ["eu","eaeu","asean","gcc","mercosur","brics","arabLeague","au",
              "opecPlus","commonwealth","oas"]
 };
@@ -150,11 +150,11 @@ window.BILATERAL_PACTS = {
     ["United States","Kenya"], ["United States","Colombia"],
     ["United States","Argentina"], ["United States","Brazil"],
     ["United States","Taiwan"],
-    ["Russia","North Korea"], ["Russia","Iran"], ["Russia","Syria"],
+    ["Russia","North Korea"], ["Russia","Syria"],
     ["China","North Korea"], ["China","Pakistan"],
     ["France","Greece"]
   ],
-  economic: [["China","Pakistan"], ["Russia","India"]]
+  economic: [["China","Pakistan"], ["Russia","India"], ["Russia","Iran"]]
 };
 
 /* ---- ADVERSARY PAIRS (editorial — used by "Adversary highlight") ---------- */

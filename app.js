@@ -181,7 +181,7 @@
     hillshade: true, fill: "tier", stat: "none",
     heat: true, heartland: false, rimland: false, nuclear: false,
     chokepoints: true, newspulse: false, lanes: false, portwatch: false, bri: false,
-    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, radar: false, clouds: false
+    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, radar: false, clouds: false, deltas: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
 
@@ -202,7 +202,7 @@
     buildIndex();
     POWER_BY_NAME = window.POWER_INDEX || {};
 
-    var COUNTRIES_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+    var COUNTRIES_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
     fetch(COUNTRIES_URL)
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (topo) {
@@ -255,6 +255,7 @@
       f.properties.gini = (st.gini === undefined ? -1 : st.gini);
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
       f.properties.relig = (window.RELIGION || {})[f.properties.cname] || "none";
+      f.properties.trader = (window.TRADE_PARTNER || {})[f.properties.cname] || "none";
       f.properties.offshore = !!(key && listSet(window.RIMLAND_OFFSHORE)[key]);
       var ct = "";
       (window.CONFLICTS || []).forEach(function (cf) {
@@ -313,8 +314,12 @@
     })) });
     map.addSource("portwatch", { type: "geojson", data: fc([]) });
     map.addSource("bri", { type: "geojson", data: fc((window.BRI_CORRIDORS || []).map(function (r) {
-      return { type: "Feature", properties: { name: r.name, w: r.w },
+      return { type: "Feature", properties: { name: r.name, w: r.w, status: r.status || "completed" },
                geometry: { type: "MultiLineString", coordinates: r.segments } };
+    })) });
+    map.addSource("bri-pois", { type: "geojson", data: fc((window.BRI_POIS || []).map(function (p) {
+      return { type: "Feature", properties: { kind: p.kind, name: p.name },
+               geometry: { type: "Point", coordinates: [p.lng, p.lat] } };
     })) });
     COUNTRY_POINTS_GEO = buildCountryPoints(geo);
     map.addSource("country-points", { type: "geojson", data: COUNTRY_POINTS_GEO });
@@ -377,6 +382,12 @@
         "buddhist", "#C9A227", "jewish", "#5BC8FF", "folk", "#B57EDC",
         "unaffiliated", "#8A93A6", "#2A3343"],
         "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // top trade partner: US vs China
+    map.addLayer({ id: "fill-trader", type: "fill", source: "countries",
+      paint: { "fill-color": ["match", ["get", "trader"],
+        "us", "#4DA3FF", "china", "#FF4D4D", "#222C3B"], "fill-opacity": 0.6 },
       layout: { visibility: "none" } });
 
     // active conflicts fill
@@ -474,11 +485,26 @@
         "text-offset": [0, 1.6], "text-anchor": "top", visibility: "none" },
       paint: { "text-color": "#6FE3D4", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
 
-    // Belt and Road corridors
-    map.addLayer({ id: "bri-line", type: "line", source: "bri",
-      paint: { "line-color": "#E8A33D", "line-opacity": 0.75, "line-dasharray": [2.2, 1.6],
+    // Belt and Road corridors: solid = completed, dashed = planned/ongoing
+    map.addLayer({ id: "bri-solid", type: "line", source: "bri",
+      filter: ["==", ["get", "status"], "completed"],
+      paint: { "line-color": "#E8A33D", "line-opacity": 0.8,
         "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 1, 10, 3] },
       layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
+    map.addLayer({ id: "bri-dash", type: "line", source: "bri",
+      filter: ["==", ["get", "status"], "planned"],
+      paint: { "line-color": "#E8A33D", "line-opacity": 0.7, "line-dasharray": [2.2, 1.8],
+        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 1, 10, 2.6] },
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
+    map.addLayer({ id: "bri-poi", type: "circle", source: "bri-pois",
+      paint: { "circle-radius": ["match", ["get", "kind"], "port", 4.5, 3.5],
+        "circle-color": ["match", ["get", "kind"], "port", "#E8A33D", "#E8E6DF"],
+        "circle-stroke-color": "#0B1020", "circle-stroke-width": 1.3 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "bri-poi-label", type: "symbol", source: "bri-pois",
+      layout: { "text-field": ["get", "name"], "text-font": ["Open Sans Regular"],
+        "text-size": 10, "text-offset": [0, 0.9], "text-anchor": "top", visibility: "none" },
+      paint: { "text-color": "#E8C98A", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
 
     // numeric labels under stat circles
     map.addLayer({ id: "stat-labels", type: "symbol", source: "country-points",
@@ -560,7 +586,15 @@
       paint: { "line-color": "#FFD633", "line-width": 2.5 } });
 
     // crisp vector country names (replaces blurry raster labels)
+    map.addSource("citylabels", { type: "raster",
+      tiles: ["https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png",
+              "https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}.png"],
+      tileSize: 256, attribution: "" });
+    map.addLayer({ id: "citylabels", type: "raster", source: "citylabels",
+      minzoom: 4, paint: { "raster-opacity": 0.9 } });
+
     map.addLayer({ id: "country-names", type: "symbol", source: "country-points",
+      maxzoom: 4.2,
       layout: { "text-field": ["get", "cname"], "text-font": ["Open Sans Regular"],
         "text-transform": "uppercase", "text-letter-spacing": 0.12,
         "text-size": ["interpolate", ["linear"], ["zoom"], 1, 9, 3, 11.5, 5, 14.5],
@@ -608,6 +642,18 @@
         "text-size": 10, "text-offset": [0, 1], "text-anchor": "top", visibility: "none" },
       paint: { "text-color": "#E8E6DF", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
 
+    // River deltas (Marshall)
+    map.addSource("deltas", { type: "geojson", data: fc((window.DELTAS || []).map(function (z) {
+      return { type: "Feature", properties: { name: z.name },
+               geometry: { type: "Polygon", coordinates: z.coords } };
+    })) });
+    map.addLayer({ id: "deltas-fill", type: "fill", source: "deltas",
+      paint: { "fill-color": "#49C5B6", "fill-opacity": 0.3 }, layout: { visibility: "none" } });
+    map.addLayer({ id: "deltas-label", type: "symbol", source: "deltas",
+      layout: { "text-field": ["get", "name"], "text-font": ["Open Sans Regular"],
+        "text-size": 10, visibility: "none" },
+      paint: { "text-color": "#7FE3D6", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
+
     // Shatterbelts
     map.addSource("shatterbelts", { type: "geojson", data: fc((window.SHATTERBELTS || []).map(function (z) {
       return { type: "Feature", properties: { name: z.name },
@@ -636,6 +682,7 @@
     setVis("fill-trade", state.fill === "trade");
     setVis("fill-religion", state.fill === "religion");
     setVis("fill-conflict", state.fill === "conflict");
+    setVis("fill-trader", state.fill === "trader");
   }
 
   /* swap the sample heat points for the live UCDP file once it exists in /data.
@@ -776,6 +823,32 @@
       })
       .catch(function () {});
   }
+  function loadClouds() {
+    fetch("https://api.rainviewer.com/public/weather-maps.json")
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var frames = (d && d.satellite && d.satellite.infrared) || [];
+        if (!frames.length) return;
+        var f = frames[frames.length - 1];
+        var url = d.host + f.path + "/256/{z}/{x}/{y}/0/0_0.png";
+        if (map.getLayer("clouds")) map.removeLayer("clouds");
+        if (map.getSource("clouds")) map.removeSource("clouds");
+        map.addSource("clouds", { type: "raster", tiles: [url], tileSize: 256,
+          attribution: "Satellite: RainViewer" });
+        map.addLayer({ id: "clouds", type: "raster", source: "clouds",
+          paint: { "raster-opacity": 0.5 } }, "chokepoint-dot");
+        setVis("clouds", state.clouds);
+      }).catch(function () {});
+  }
+  function setClouds(on) {
+    state.clouds = on;
+    if (on) {
+      loadClouds();
+      if (!radarTimer) radarTimer = setInterval(function () {
+        if (state.radar) loadRadar(); if (state.clouds) loadClouds();
+      }, 10 * 60 * 1000);
+    } else if (map.getLayer("clouds")) setVis("clouds", false);
+  }
   function setRadar(on) {
     state.radar = on;
     if (on) {
@@ -889,6 +962,7 @@
         row("rad", "fill-trade", "Trade balance (% GDP)", state.fill === "trade", "fillgrp") +
         row("rad", "fill-religion", "Majority religion", state.fill === "religion", "fillgrp") +
         row("rad", "fill-conflict", "Active conflicts", state.fill === "conflict", "fillgrp") +
+        row("rad", "fill-trader", "Top trade partner: US/China", state.fill === "trader", "fillgrp") +
         '<div class="legend" id="legend"></div>',
         "Only one can paint the countries at a time.") +
 
@@ -912,7 +986,8 @@
       sec("ship", "Economy &amp; connectivity — stack",
         row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6") +
         row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4") +
-        row("chk", "bri", "Belt &amp; Road corridors", state.bri, null, "#E8A33D"),
+        row("chk", "bri", "Belt &amp; Road corridors", state.bri, null, "#E8A33D") +
+        '<p class="hint">Solid = operational; dashed = planned/ongoing. Gold dots = ports, light = key cities.</p>',
         "Rings sized by 7-day avg daily transits, updated weekly.") +
 
       sec("signals", "Live signals — stack",
@@ -926,7 +1001,8 @@
         row("chk", "rimland", "Spykman Rimland + offshore", state.rimland, null, "#C8B08A") +
         row("chk", "islandchains", "Island Chains (1st–3rd)", state.islandchains, null, "#5BC8FF") +
         row("chk", "pearls", "String of Pearls", state.pearls, null, "#E8E6DF") +
-        row("chk", "shatter", "Shatterbelts (Cohen)", state.shatter, null, "#C44569")) +
+        row("chk", "shatter", "Shatterbelts (Cohen)", state.shatter, null, "#C44569") +
+        row("chk", "deltas", "River deltas (Marshall)", state.deltas, null, "#49C5B6")) +
 
       sec("status", "Status — stack",
         row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A") +
@@ -945,7 +1021,7 @@
     byId("btn-reset").onclick = function () {
       state.fill = "none"; state.stat = "none";
       ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
-       "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds"].forEach(function (k) { state[k] = false; });
+       "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas"].forEach(function (k) { state[k] = false; });
       BLOCS.forEach(function (b) { state[b.key] = false; });
       applyFill(); switchStat("none");
       [["hillshade",["hillshade"]],["heat",["conflict-heat"]],
@@ -953,14 +1029,14 @@
        ["rimland",["rimland-fill","rimland-line","offshore-fill","offshore-line"]],
        ["nuclear",["nuclear-fill","nuclear-line-icbm","nuclear-line-reg","nuclear-label"]],
        ["islandchains",["islandchains-line"]],["pearls",["pearls-line","pearls-dot","pearls-label"]],
-       ["shatter",["shatter-fill","shatter-line"]],
+       ["shatter",["shatter-fill","shatter-line"]],["deltas",["deltas-fill","deltas-label"]],
        ["radar",["wx-radar"]],["clouds",["wx-clouds"]],
        ["chokepoints",["chokepoint-dot","chokepoint-label"]],
        ["newspulse",["newspulse"]],["lanes",["lanes-glow","lanes-core"]],
-       ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-line"]]
+       ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]]
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
       BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
-      clearAllies(); clearAdversaries(); clearBases(); setRadar(false);
+      clearAllies(); clearAdversaries(); clearBases(); setRadar(false); setClouds(false);
       buildRail(); updateLegend(); tele();
     };
 
@@ -974,7 +1050,7 @@
     });
 
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict"].forEach(function (v) {
+    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
     });
     ["none", "pop", "gdp", "gdppc", "milex", "milper", "renew"].forEach(function (m) {
@@ -986,6 +1062,7 @@
     byId("cb-heat").onchange = function (e) { state.heat = e.target.checked; setVis("conflict-heat", state.heat); tele(); };
     byId("cb-newspulse").onchange = function (e) { state.newspulse = e.target.checked; setVis("newspulse", state.newspulse); tele(); };
     byId("cb-radar").onchange = function (e) { setRadar(e.target.checked); tele(); };
+    byId("cb-clouds").onchange = function (e) { setClouds(e.target.checked); tele(); };
     byId("cb-radar").onchange = function (e) { state.radar = e.target.checked; setVis("wx-radar", state.radar); tele(); };
     byId("cb-clouds").onchange = function (e) { state.clouds = e.target.checked; setVis("wx-clouds", state.clouds); tele(); };
     byId("cb-heartland").onchange = function (e) {
@@ -1015,6 +1092,10 @@
       state.shatter = e.target.checked;
       setVis("shatter-fill", state.shatter); setVis("shatter-line", state.shatter); tele();
     };
+    byId("cb-deltas").onchange = function (e) {
+      state.deltas = e.target.checked;
+      setVis("deltas-fill", state.deltas); setVis("deltas-label", state.deltas); tele();
+    };
     byId("cb-lanes").onchange = function (e) {
       state.lanes = e.target.checked;
       setVis("lanes-glow", state.lanes); setVis("lanes-core", state.lanes); tele();
@@ -1024,7 +1105,9 @@
       setVis("portwatch-ring", state.portwatch); setVis("portwatch-label", state.portwatch); tele();
     };
     byId("cb-bri").onchange = function (e) {
-      state.bri = e.target.checked; setVis("bri-line", state.bri); tele();
+      state.bri = e.target.checked;
+      ["bri-solid","bri-dash","bri-poi","bri-poi-label"].forEach(function (id) { setVis(id, state.bri); });
+      tele();
     };
     byId("cb-allymode").onchange = function (e) {
       state.allymode = e.target.checked;
@@ -1067,6 +1150,8 @@
       ? [["Equal 25", "#4E88A6"], ["40", "#E8843D"], ["Unequal 55", "#E84393"]]
       : state.fill === "trade"
       ? [["Deficit", "#E84393"], ["0", "#3B5266"], ["Surplus", "#3FE08A"]]
+      : state.fill === "trader"
+      ? [["US-led", "#4DA3FF"], ["China-led", "#FF4D4D"]]
       : state.fill === "conflict"
       ? [["Interstate", "#FF4D4D"], ["Intl. civil/proxy", "#E8843D"], ["Civil", "#C9A227"]]
       : state.fill === "religion"
