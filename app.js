@@ -64,6 +64,14 @@
     Object.keys(window.MEMBERSHIPS || {}).forEach(function (b) {
       (window.MEMBERSHIPS[b] || []).forEach(function (k) { keys[k] = 1; });
     });
+    // domain-only countries (e.g. North Korea sits in RIMLAND/NUCLEAR but in
+    // no tier/role/bloc) must still be canonicalised, or their special-layer
+    // membership flags never fire.
+    [window.RIMLAND, window.RIMLAND_OFFSHORE, window.NUCLEAR,
+     window.USBASE_HOSTS, Object.keys(window.NUCLEAR_INFO || {}),
+     Object.keys(window.NAME_ALIASES || {})].forEach(function (list) {
+      (list || []).forEach(function (k) { keys[k] = 1; });
+    });
     Object.keys(keys).forEach(function (k) {
       nameIndex[norm(k)] = k;
       ((window.NAME_ALIASES || {})[k] || []).forEach(function (a) { nameIndex[norm(a)] = k; });
