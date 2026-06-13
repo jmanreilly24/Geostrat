@@ -17,6 +17,10 @@ jobs:
         run: python scripts/update_newspulse.py
       - name: Commit if changed
         run: |
+          if [ ! -f data/newspulse.geojson ]; then
+            echo "No data/newspulse.geojson produced - fetch likely failed. Skipping commit."
+            exit 0
+          fi
           git config user.name "geostrat-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/newspulse.geojson
