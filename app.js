@@ -290,6 +290,20 @@
     return list;
   }
   function inSet(b) { var s = {}; membershipListAt(b, CUR_YEAR).forEach(function (k) { s[k] = 1; }); return s; }
+  // V-Dem lookup that tolerates both the new nested shape ({libdem:{year:{...}},
+  // freexp:{...}}) and the legacy flat-by-year shape ({year:{...}}, libdem only).
+  function vdemAt(metric, year, name) {
+    if (!VDEM) return -1;
+    var idx = VDEM[metric];
+    if (!idx) {
+      // legacy shape — only libdem is available, no freexp until next workflow.
+      if (metric !== "libdem") return -1;
+      idx = VDEM;
+    }
+    var y = String(Math.min(year, 2025));
+    var vy = idx[y] || idx[String(year - 1)];
+    return (vy && vy[name] !== undefined) ? vy[name] : -1;
+  }
   function whAt(name, year) {
     var ni = (window.NUCLEAR_INFO || {})[name];
     if (!ni) return 0;
@@ -331,8 +345,8 @@
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
       f.properties.relig = (window.RELIGION || {})[f.properties.cname] || "none";
       f.properties.trader = (window.TRADE_PARTNER || {})[f.properties.cname] || "none";
-      var vy = VDEM && (VDEM[String(Math.min(CUR_YEAR, 2025))] || VDEM[String(CUR_YEAR - 1)]);
-      f.properties.vdem = (vy && vy[f.properties.cname] !== undefined) ? vy[f.properties.cname] : -1;
+      f.properties.vdem = vdemAt("libdem", CUR_YEAR, f.properties.cname);
+      f.properties.freexp = vdemAt("freexp", CUR_YEAR, f.properties.cname);
       f.properties.usbase = (window.USBASE_HOSTS || []).indexOf(f.properties.cname) >= 0;
       f.properties.offshore = !!(key && listSet(window.RIMLAND_OFFSHORE)[key]);
       var cfs = conflictsAt(f.properties.cname, CUR_YEAR);
@@ -365,6 +379,7 @@
         properties: { cname: f.properties.cname, pop: st.pop || 0, gdp: st.gdp || 0,
           gdppc: st.gdppc || 0, milex: st.milex || 0, milper: st.milper || 0,
           renew: st.renew || 0, r: 0,
+          freexp: vdemAt("freexp", CUR_YEAR, f.properties.cname),
           nwh: whAt(f.properties.cname, CUR_YEAR) },
         geometry: { type: "Point", coordinates: c } });
     });
@@ -469,6 +484,14 @@
     map.addLayer({ id: "fill-vdem", type: "fill", source: "countries",
       paint: { "fill-color": ["interpolate", ["linear"], ["get", "vdem"],
         -1, "#222C3B", 0, "#8E2F4F", 25, "#C2552E", 50, "#C9A227", 75, "#4E9E6E", 100, "#3FE08A"],
+        "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // V-Dem freedom of expression index (0-100) — distinct blue-violet ramp
+    // so it reads differently from the libdem fill at a glance.
+    map.addLayer({ id: "fill-freexp", type: "fill", source: "countries",
+      paint: { "fill-color": ["interpolate", ["linear"], ["get", "freexp"],
+        -1, "#222C3B", 0, "#3B1F4F", 25, "#6E2F8A", 50, "#A07AC4", 75, "#5BC8FF", 100, "#A8E8FF"],
         "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
@@ -642,7 +665,9 @@
       milper: ["interpolate", ["linear"], ["get", "milper"],
         0, "#1E2A40", 50000, "#5B4A22", 250000, "#C28A2A", 1e6, "#F0A83C", 3e6, "#FFD633"],
       renew: ["interpolate", ["linear"], ["get", "renew"],
-        0, "#58708F", 25, "#46946E", 50, "#3AB374", 75, "#3FD685", 100, "#7CFFB0"]
+        0, "#58708F", 25, "#46946E", 50, "#3AB374", 75, "#3FD685", 100, "#7CFFB0"],
+      freexp: ["interpolate", ["linear"], ["get", "freexp"],
+        -1, "#222C3B", 0, "#3B1F4F", 25, "#6E2F8A", 50, "#A07AC4", 75, "#5BC8FF", 100, "#A8E8FF"]
     };
     Object.keys(STAT_RAMPS).forEach(function (m) {
       map.addLayer({ id: "fill-stat-" + m, type: "fill", source: "countries",
@@ -817,6 +842,7 @@
     setVis("fill-conflict", state.fill === "conflict");
     setVis("fill-trader", state.fill === "trader");
     setVis("fill-vdem", state.fill === "vdem");
+    setVis("fill-freexp", state.fill === "freexp");
     setVis("fill-usbases", state.fill === "usbases");
     ["bases-own"].forEach(function (l) {
       if (state.fill === "usbases") {
@@ -871,12 +897,14 @@
     return max;
   }
   function statLabel(metric, v) {
+    if (v === undefined || v === null) return "";
+    if (metric === "freexp") return v >= 0 ? Math.round(v) : "";
     if (!v) return "";
     if (metric === "renew") return Math.round(v) + "%";
     if (metric === "gdp" || metric === "gdppc" || metric === "milex") return fmtUSD(v);
     return fmtNum(v);
   }
-  var STAT_METRICS = ["pop", "gdp", "gdppc", "milex", "milper", "renew"];
+  var STAT_METRICS = ["pop", "gdp", "gdppc", "milex", "milper", "renew", "freexp"];
   function applyStatRender() {
     var on = state.stat !== "none";
     var ringMode = on && state.statMode === "ring";
@@ -907,6 +935,7 @@
       f.properties.pop = st.pop || 0; f.properties.gdp = st.gdp || 0;
       f.properties.gdppc = st.gdppc || 0; f.properties.milex = st.milex || 0;
       f.properties.milper = st.milper || 0; f.properties.renew = st.renew || 0;
+      f.properties.freexp = vdemAt("freexp", CUR_YEAR, f.properties.cname);
       f.properties.nwh = whAt(f.properties.cname, CUR_YEAR);
     });
     if (state.stat !== "none") switchStat(state.stat);
@@ -1201,6 +1230,7 @@
     var fillsGeneral = [
       row("rad", "fill-role", "Agent / pivot", state.fill === "role", "fillgrp"),
       row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp"),
+      row("rad", "fill-freexp", "Freedom of expression (V-Dem)", state.fill === "freexp", "fillgrp"),
       row("rad", "fill-gini", "Inequality (Gini)", state.fill === "gini", "fillgrp"),
       row("rad", "fill-vdem", "Liberal democracy (V-Dem)", state.fill === "vdem", "fillgrp"),
       row("rad", "fill-religion", "Majority religion", state.fill === "religion", "fillgrp"),
@@ -1234,6 +1264,7 @@
       sec("stats", "Statistics",
         row("rad", "stat-none", "None", state.stat === "none", "statgrp") +
         alpha([
+          row("rad", "stat-freexp", "Freedom of expression", state.stat === "freexp", "statgrp"),
           row("rad", "stat-gdp", "GDP", state.stat === "gdp", "statgrp"),
           row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp"),
           row("rad", "stat-milper", "Military personnel", state.stat === "milper", "statgrp"),
@@ -1361,10 +1392,10 @@
       tele();
     };
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader", "vdem", "usbases"].forEach(function (v) {
+    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader", "vdem", "freexp", "usbases"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
     });
-    ["none", "pop", "gdp", "gdppc", "milex", "milper", "renew"].forEach(function (m) {
+    ["none", "pop", "gdp", "gdppc", "milex", "milper", "renew", "freexp"].forEach(function (m) {
       byId("cb-stat-" + m).onchange = function (e) { if (e.target.checked) switchStat(m); };
     });
     byId("cb-statmode-fill").onchange = function (e) {
@@ -1468,6 +1499,7 @@
     if (state.fill === "religion") return "Editorial, ~2024 estimates";
     if (state.fill === "trader") return "Editorial, 2024-25 trade pattern (not year-adjusted)";
     if (state.fill === "vdem") return "V-Dem v2x_libdem via OWID (CC BY), year " + Math.min(CUR_YEAR, 2025);
+    if (state.fill === "freexp") return "V-Dem v2x_freexp_altinf via OWID (CC BY), year " + Math.min(CUR_YEAR, 2025);
     if (state.fill === "usbases") return "After Vine (2021) / IBON (2025): 742 bases, 82 hosts. Dots = curated majors. 2026 snapshot";
     if (state.fill === "conflict") return (window.CONFLICTS_VINTAGE || "Editorial") + " \u00B7 era-bounded by YEAR";
     return "";
@@ -1491,6 +1523,8 @@
       ? [["Deficit", "#E84393"], ["0", "#3B5266"], ["Surplus", "#3FE08A"]]
       : state.fill === "vdem"
       ? [["0", "#8E2F4F"], ["50", "#C9A227"], ["100", "#3FE08A"]]
+      : state.fill === "freexp"
+      ? [["0", "#3B1F4F"], ["50", "#A07AC4"], ["100", "#A8E8FF"]]
       : state.fill === "usbases"
       ? [["Hosts US bases/installations", "#C0392B"]]
       : state.fill === "trader"
