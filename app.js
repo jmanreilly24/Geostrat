@@ -719,7 +719,7 @@
       map.addLayer({ id: "res-" + t[0], type: "circle", source: "resources",
         filter: ["==", ["get", "rtype"], t[0]],
         paint: { "circle-radius": 4.5, "circle-color": t[2],
-          "circle-stroke-color": "#0B1020", "circle-stroke-width": 1.3 },
+          "circle-stroke-color": "#E8ECF1", "circle-stroke-width": 1 },
         layout: { visibility: "none" } });
       map.addLayer({ id: "res-" + t[0] + "-label", type: "symbol", source: "resources",
         filter: ["==", ["get", "rtype"], t[0]], minzoom: 2.5,

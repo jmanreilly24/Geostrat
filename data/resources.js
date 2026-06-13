@@ -48,7 +48,7 @@ window.RESOURCES = [
 ];
 window.RESOURCE_TYPES = [
   ["lithium", "Lithium", "#7FE3D6"], ["cobalt", "Cobalt", "#5B8CFF"],
-  ["copper", "Copper", "#E8843D"], ["oil", "Oil", "#1A1A1A"],
+  ["copper", "Copper", "#E8843D"], ["oil", "Oil", "#E8A33D"],
   ["gas", "Gas", "#9B6EE8"], ["iron", "Iron ore", "#C0392B"],
   ["rareearth", "Rare earths", "#3FE08A"], ["uranium", "Uranium", "#F5D547"]
 ];
