@@ -173,6 +173,11 @@ html, body {
   font-family: "IBM Plex Mono", monospace; font-size: 10.5px; color: var(--muted);
 }
 .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.legend .legend-title {
+  flex-basis: 100%; font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: 0.15em; text-transform: uppercase; color: var(--signal-dim);
+  margin-top: 4px;
+}
 
 /* ---- Telemetry strip (signature) --------------------------------------- */
 .telemetry {

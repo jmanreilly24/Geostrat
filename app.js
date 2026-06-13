@@ -617,11 +617,17 @@
         "text-size": 10, "text-offset": [0, 0.9], "text-anchor": "top", visibility: "none" },
       paint: { "text-color": "#E8C98A", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
 
-    // numeric labels for stats (rings + choropleth share the same labels)
+    // numeric labels for stats (rings + choropleth share the same labels).
+    // y-offset is per-feature (text-em units, computed from the ring radius)
+    // so the number always sits a small padding below the circle's bottom
+    // edge rather than overlapping the ring like the previous fixed offset.
     map.addLayer({ id: "stat-labels", type: "symbol", source: "country-points",
-      filter: ["all", [">", ["get", "r"], 0], ["!=", ["get", "lbl"], ""]],
+      filter: ["!=", ["get", "lbl"], ""],
       layout: { "text-field": ["get", "lbl"], "text-font": ["Open Sans Regular"],
-        "text-size": 10.5, "text-offset": [0, 0.7], "text-anchor": "top",
+        "text-size": 10.5,
+        "text-offset": ["literal", [0, 0]],   // overwritten per feature via lblOffset
+        "text-radial-offset": ["coalesce", ["get", "lblOffset"], 1.5],
+        "text-anchor": "top",
         "text-allow-overlap": false, "text-letter-spacing": 0.02,
         visibility: "none" },
       paint: { "text-color": "#FFE2A8", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
@@ -920,12 +926,17 @@
     var max = statMax(metric);
     COUNTRY_POINTS_GEO.features.forEach(function (f) {
       var v = f.properties[metric] || 0;
-      // Smaller cap (≈22px) so rings read as accents, not blobs.
-      f.properties.r = (v > 0 && max > 0) ? Math.sqrt(v / max) * 20 + 2 : 0;
+      // Smaller cap (~22px) so rings read as accents, not blobs.
+      var r = (v > 0 && max > 0) ? Math.sqrt(v / max) * 20 + 2 : 0;
+      f.properties.r = r;
       f.properties.lbl = statLabel(metric, v);
+      // label radial-offset in text-em units; sits just below the ring edge.
+      // Falls back to ~1.6em when r=0 (no ring, e.g. choropleth mode).
+      f.properties.lblOffset = r > 0 ? (r + 4) / 10.5 : 1.6;
     });
     var s = map.getSource("country-points"); if (s) s.setData(COUNTRY_POINTS_GEO);
     applyStatRender();
+    updateStatLegend();
     tele();
   }
   function rebuildStats() {
@@ -1275,6 +1286,7 @@
         '<div class="statmode">' +
           row("chk", "statmode-fill", "Render as country fill (choropleth)",
               state.statMode === "fill", null, "#E8A33D") +
+          '<div class="legend" id="stat-legend"></div>' +
         '</div>',
         "Hollow amber rings over the active fill by default; toggle to repaint as a choropleth.") +
 
@@ -1539,6 +1551,38 @@
     el.innerHTML = items.map(function (i) {
       return '<span><i style="background:' + i[1] + '"></i>' + i[0] + "</span>";
     }).join("");
+    updateStatLegend();
+  }
+
+  // legend strip for the active statistic. Renders only in choropleth mode
+  // (state.statMode === "fill") — in ring mode the size already encodes the
+  // value, so the gradient is irrelevant.
+  var STAT_LEGEND = {
+    pop:    [["0", "#1E2A40"], ["50M", "#4DA38A"], ["1.4B+", "#FFD633"]],
+    gdp:    [["$0", "#1E2A40"], ["$1T", "#4DA38A"], ["$25T+", "#FFD633"]],
+    gdppc:  [["$0", "#1E2A40"], ["$12k", "#4DA38A"], ["$90k+", "#FFD633"]],
+    milex:  [["$0", "#3B4D63"], ["$10B", "#C28A35"], ["$900B+", "#FFD633"]],
+    milper: [["0", "#1E2A40"], ["250k", "#C28A2A"], ["3M+", "#FFD633"]],
+    renew:  [["0%", "#58708F"], ["50%", "#3AB374"], ["100%", "#7CFFB0"]],
+    freexp: [["0", "#3B1F4F"], ["50", "#A07AC4"], ["100", "#A8E8FF"]]
+  };
+  var STAT_LABEL = {
+    pop: "Population", gdp: "GDP", gdppc: "GDP / capita",
+    milex: "Mil. spending", milper: "Mil. personnel",
+    renew: "Renewables %", freexp: "Freedom of expression"
+  };
+  function updateStatLegend() {
+    var el = byId("stat-legend");
+    if (!el) return;
+    if (state.stat === "none" || state.statMode !== "fill") {
+      el.innerHTML = ""; return;
+    }
+    var items = STAT_LEGEND[state.stat] || [];
+    el.innerHTML =
+      '<div class="legend-title">' + (STAT_LABEL[state.stat] || state.stat) + "</div>" +
+      items.map(function (i) {
+        return '<span><i style="background:' + i[1] + '"></i>' + i[0] + "</span>";
+      }).join("");
   }
 
   /* ---- telemetry + interaction ------------------------------------------ */
