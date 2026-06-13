@@ -212,8 +212,9 @@
     buildIndex();
     POWER_BY_NAME = window.POWER_INDEX || {};
 
-    var COUNTRIES_URL = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
-    fetch(COUNTRIES_URL)
+    var COUNTRIES_50M = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
+    var COUNTRIES_10M = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json";
+    fetch(COUNTRIES_50M)
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (topo) {
         if (typeof topojson === "undefined") throw new Error("topojson decoder did not load");
@@ -234,12 +235,46 @@
         buildRail();
         wireInteraction();
         byId("overlay").classList.add("hide");
+        // Background upgrade: swap to 10m geometry for crisper bloc outlines
+        // and coastlines once the initial 50m paint is on screen. Idle-time
+        // scheduling so it doesn't delay first interaction.
+        var schedule = window.requestIdleCallback ||
+          function (fn) { return setTimeout(fn, 350); };
+        schedule(function () { upgradeTo10m(COUNTRIES_10M); });
       })
       .catch(function (err) {
         fail("Couldn't load the world map data.<br><br>If you opened this file by double-clicking it, " +
              "your browser is blocking the download — publish it to GitHub Pages (or run a local server) " +
              "and it will work.<br><br><span style='opacity:.6'>" + (err && err.message) + "</span>");
       });
+  }
+
+  // Fetch the higher-resolution Natural Earth (10m) layer in the background and
+  // swap it into the existing "countries" source. All decorated properties are
+  // re-derived from the same name-join, so fills, filters, click handlers,
+  // year-gated logic, and stat rings continue to work after the swap.
+  function upgradeTo10m(url) {
+    fetch(url)
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+      .then(function (topo) {
+        if (typeof topojson === "undefined" || !topo || !topo.objects) return;
+        var key = topo.objects.countries ? "countries" : Object.keys(topo.objects)[0];
+        var geo = topojson.feature(topo, topo.objects[key]);
+        geo.features = geo.features.map(fixAntimeridian);
+        COUNTRIES_GEO = geo;
+        decorate(geo);
+        var src = map.getSource("countries");
+        if (src) src.setData(geo);
+        // recompute centroids for stat rings, names, nuclear labels
+        COUNTRY_POINTS_GEO = buildCountryPoints(geo);
+        var sp = map.getSource("country-points");
+        if (sp) sp.setData(COUNTRY_POINTS_GEO);
+        // any active fill/stat needs to re-resolve against the new features
+        applyFill();
+        if (state.stat !== "none") switchStat(state.stat);
+        updateLegend();
+      })
+      .catch(function (e) { /* keep 50m on failure */ console.warn("10m upgrade skipped:", e && e.message); });
   }
 
   var CUR_YEAR = 2026;
