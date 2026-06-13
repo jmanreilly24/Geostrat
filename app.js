@@ -303,6 +303,18 @@
     var vy = idx[y] || idx[String(year - 1)];
     return (vy && vy[name] !== undefined) ? vy[name] : -1;
   }
+  // Year-aware top trade partner. Static data.TRADE_PARTNER is the current
+  // partner ("us"/"china"); TRADE_PARTNER_CHANGES[name] gives the year of
+  // the most recent flip — before that year, the lookup returns the
+  // opposite partner. Countries not in the changes table are assumed to
+  // have held their current partner throughout the slider window.
+  function traderAt(name, year) {
+    var cur = (window.TRADE_PARTNER || {})[name];
+    if (!cur) return "none";
+    var flip = (window.TRADE_PARTNER_CHANGES || {})[name];
+    if (flip && year < flip) return cur === "us" ? "china" : "us";
+    return cur;
+  }
   function whAt(name, year) {
     var ni = (window.NUCLEAR_INFO || {})[name];
     if (!ni) return 0;
@@ -339,11 +351,19 @@
       var st = powerOf(f.properties.cname);
       f.properties.composite = st.composite || 0;
       f.properties.renew = st.renew || 0;
+      // Choropleth fills (fill-stat-*) and the older fill-milex layer both
+      // read these properties; keep them in sync via the same World Bank
+      // record so the country source backs every paint expression.
+      f.properties.milex = st.milex || 0;
       f.properties.milexv = st.milex || 0;
+      f.properties.milper = st.milper || 0;
+      f.properties.pop = st.pop || 0;
+      f.properties.gdp = st.gdp || 0;
+      f.properties.gdppc = st.gdppc || 0;
       f.properties.gini = (st.gini === undefined ? -1 : st.gini);
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
       f.properties.relig = (window.RELIGION || {})[f.properties.cname] || "none";
-      f.properties.trader = (window.TRADE_PARTNER || {})[f.properties.cname] || "none";
+      f.properties.trader = traderAt(f.properties.cname, CUR_YEAR);
       f.properties.vdem = vdemAt("libdem", CUR_YEAR, f.properties.cname);
       f.properties.freexp = vdemAt("freexp", CUR_YEAR, f.properties.cname);
       f.properties.usbase = (window.USBASE_HOSTS || []).indexOf(f.properties.cname) >= 0;
@@ -888,7 +908,15 @@
       var st = powerOf(f.properties.cname);
       f.properties.composite = st.composite || 0;
       f.properties.renew = st.renew || 0;
+      // Choropleth fills (fill-stat-*) and the older fill-milex layer both
+      // read these properties; keep them in sync via the same World Bank
+      // record so the country source backs every paint expression.
+      f.properties.milex = st.milex || 0;
       f.properties.milexv = st.milex || 0;
+      f.properties.milper = st.milper || 0;
+      f.properties.pop = st.pop || 0;
+      f.properties.gdp = st.gdp || 0;
+      f.properties.gdppc = st.gdppc || 0;
       f.properties.gini = (st.gini === undefined ? -1 : st.gini);
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
     });
@@ -989,6 +1017,7 @@
     decorate(COUNTRIES_GEO);
     var src = map.getSource("countries"); if (src) src.setData(COUNTRIES_GEO);
     rebuildStats(); clearAllies(); clearAdversaries(); clearBases(); updateLegend();
+    refreshCard();
   }
   function setYear(y) {
     CUR_YEAR = y;
@@ -1307,6 +1336,7 @@
 
       sec("security", "Conflict &amp; security",
         sub("Choropleth") +
+        row("rad", "fill-none-security", "None", state.fill === "none", "fillgrp") +
         row("rad", "fill-conflict", "Active conflicts", state.fill === "conflict", "fillgrp") +
         row("rad", "fill-usbases", "US military footprint", state.fill === "usbases", "fillgrp") +
         sub("Stack toggles") +
@@ -1316,6 +1346,7 @@
 
       sec("econ", "Economy &amp; connectivity",
         sub("Choropleth") +
+        row("rad", "fill-none-econ", "None", state.fill === "none", "fillgrp") +
         row("rad", "fill-trader", "Top trade partner: US/China", state.fill === "trader", "fillgrp") +
         sub("Stack toggles") +
         row("chk", "bri", "Belt &amp; Road corridors", state.bri, null, "#E8A33D") +
@@ -1415,10 +1446,21 @@
     };
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
     ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader", "vdem", "freexp", "usbases"].forEach(function (v) {
-      byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
+      byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); refreshCard(); tele(); } };
+    });
+    // The Security and Economy subsections each carry their own "None" radio
+    // (separate ids, shared name="fillgrp" so radio uniqueness still holds).
+    // Both clear the active fill so the user can opt out per category without
+    // scrolling back up to Country fills.
+    ["fill-none-security", "fill-none-econ"].forEach(function (id) {
+      var el = byId("cb-" + id);
+      if (el) el.onchange = function (e) {
+        if (!e.target.checked) return;
+        state.fill = "none"; applyFill(); updateLegend(); refreshCard(); tele();
+      };
     });
     ["none", "pop", "gdp", "gdppc", "milex", "milper", "renew", "freexp"].forEach(function (m) {
-      byId("cb-stat-" + m).onchange = function (e) { if (e.target.checked) switchStat(m); };
+      byId("cb-stat-" + m).onchange = function (e) { if (e.target.checked) { switchStat(m); refreshCard(); } };
     });
     byId("cb-statmode-fill").onchange = function (e) {
       state.statMode = e.target.checked ? "fill" : "ring";
@@ -1517,7 +1559,7 @@
     }
     if (state.fill === "tier" || state.fill === "role") return "Editorial, 2026 snapshot";
     if (state.fill === "religion") return "Editorial, ~2024 estimates";
-    if (state.fill === "trader") return "Editorial, 2024-25 trade pattern (not year-adjusted)";
+    if (state.fill === "trader") return "Editorial · partner flips per TRADE_PARTNER_CHANGES · year " + CUR_YEAR;
     if (state.fill === "vdem") return "V-Dem v2x_libdem via OWID (CC BY), year " + Math.min(CUR_YEAR, 2025);
     if (state.fill === "freexp") return "V-Dem v2x_freexp_altinf via OWID (CC BY), year " + Math.min(CUR_YEAR, 2025);
     if (state.fill === "usbases") return "After Vine (2021) / IBON (2025): 742 bases, 82 hosts. Dots = curated majors. 2026 snapshot";
@@ -1620,7 +1662,10 @@
     map.on("mouseenter", "countries-hit", function () { map.getCanvas().style.cursor = "pointer"; });
     map.on("mouseleave", "countries-hit", function () { map.getCanvas().style.cursor = ""; });
 
-    byId("card-close").onclick = function () { byId("card").classList.remove("show"); };
+    byId("card-close").onclick = function () {
+      byId("card").classList.remove("show");
+      CARD_OPEN = null;
+    };
 
     var rt = byId("rail-toggle");
     if (rt) rt.onclick = function () { byId("rail").classList.toggle("hidden"); };
@@ -1685,7 +1730,54 @@
   }
   function setText(id, t) { var el = byId(id); if (el) el.textContent = t; }
   function setHTML(id, h) { var el = byId(id); if (el) el.innerHTML = h; }
+  var CARD_OPEN = null;  // cname currently shown in the card
+
+  // Active-layer descriptors for the card. Each entry returns a one-line
+  // "label: value" summary for the country properties under the current fill
+  // or stat. Used to surface the active metric in the card so the user can
+  // see the exact number behind the color they're looking at.
+  function fmtPct(v) { return v == null || v < 0 ? "—" : Math.round(v) + "%"; }
+  function fmtVdem(v) { return v == null || v < 0 ? "—" : Math.round(v) + " / 100"; }
+  var FILL_CARD = {
+    tier:    function (p, st) { return ["Power tier", TIER_LABEL[p.tier] || "—"]; },
+    role:    function (p, st) { return ["Strategic role", ROLE_LABEL[p.role] || "—"]; },
+    power:   function (p, st) { return ["Computed power (share)",
+                                        st.composite != null ? (st.composite * 100).toFixed(2) + "%" : "—"]; },
+    renew:   function (p, st) { return ["Renewables (% of grid)", fmtPct(st.renew)]; },
+    milex:   function (p, st) { return ["Military spending", st.milex ? fmtUSD(st.milex) : "—"]; },
+    gini:    function (p, st) { return ["Inequality (Gini)", st.gini != null && st.gini >= 0 ? Math.round(st.gini) : "—"]; },
+    trade:   function (p, st) { return ["Trade balance (% GDP)",
+                                        st.trade != null && st.trade !== -999 ? (st.trade > 0 ? "+" : "") + st.trade.toFixed(1) + "%" : "—"]; },
+    religion: function (p, st) { return ["Majority religion", (p.relig || "—").replace(/^./, function (c) { return c.toUpperCase(); })]; },
+    conflict: function (p, st) { return ["Active conflict type", p.conflict || "—"]; },
+    trader:  function (p, st) { return ["Top trade partner",
+                                        p.trader === "us" ? "US-led" : p.trader === "china" ? "China-led" : "—"]; },
+    vdem:    function (p, st) { return ["Liberal democracy (V-Dem)", fmtVdem(p.vdem)]; },
+    freexp:  function (p, st) { return ["Freedom of expression (V-Dem)", fmtVdem(p.freexp)]; },
+    usbases: function (p, st) { return ["US military footprint", p.usbase ? "Host country" : "—"]; }
+  };
+  var STAT_CARD = {
+    pop:    function (st) { return ["Population", st.pop ? fmtNum(st.pop) : "—"]; },
+    gdp:    function (st) { return ["GDP", st.gdp ? fmtUSD(st.gdp) : "—"]; },
+    gdppc:  function (st) { return ["GDP per capita", st.gdppc ? fmtUSD(st.gdppc) : "—"]; },
+    milex:  function (st) { return ["Military spending", st.milex ? fmtUSD(st.milex) : "—"]; },
+    milper: function (st) { return ["Military personnel", st.milper ? fmtNum(st.milper) : "—"]; },
+    renew:  function (st) { return ["Renewables", fmtPct(st.renew)]; },
+    freexp: function (st) { var p = COUNTRIES_GEO && COUNTRIES_GEO.features
+                              .filter(function (f) { return f.properties.cname === CARD_OPEN; })[0];
+                            return ["Freedom of expression", fmtVdem(p && p.properties.freexp)]; }
+  };
+
+  function refreshCard() {
+    if (!CARD_OPEN || !COUNTRIES_GEO) return;
+    var f = COUNTRIES_GEO.features.filter(function (f) {
+      return f.properties.cname === CARD_OPEN;
+    })[0];
+    if (f) showCard(f.properties);
+  }
+
   function showCard(p) {
+    CARD_OPEN = p.cname;
     setText("card-name", p.cname);
     setText("card-tier", TIER_LABEL[p.tier] || p.tier);
     setText("card-role", ROLE_LABEL[p.role] || "—");
@@ -1694,6 +1786,33 @@
     setHTML("card-blocs", chips.length ? chips.join("") : '<span class="value">—</span>');
 
     var st = powerOf(p.cname);
+    var yearLabel = CUR_YEAR >= 2026 ? "live" : CUR_YEAR;
+    var yearEl = byId("card-year");
+    if (yearEl) yearEl.textContent = "[" + yearLabel + "]";
+
+    // active-layer line: what the current fill or active stat says about
+    // this country. Hidden if neither produces a meaningful value.
+    var activeRows = [];
+    var ff = FILL_CARD[state.fill];
+    if (ff) {
+      var pair = ff(p, st);
+      if (pair && pair[1] !== "—") activeRows.push("<b>" + pair[0] + ":</b> " + pair[1]);
+    }
+    var sf = STAT_CARD[state.stat];
+    if (sf && state.stat !== state.fill) {
+      var pair2 = sf(st);
+      if (pair2 && pair2[1] !== "—") activeRows.push("<b>" + pair2[0] + ":</b> " + pair2[1]);
+    }
+    var actField = byId("card-active-field");
+    var actVal = byId("card-active");
+    if (activeRows.length) {
+      if (actField) actField.style.display = "";
+      if (actVal) { actVal.style.display = ""; actVal.innerHTML = activeRows.join("<br>"); }
+    } else {
+      if (actField) actField.style.display = "none";
+      if (actVal) actVal.style.display = "none";
+    }
+
     var hasStats = st.gdp || st.pop || st.milex;
     setHTML("card-stats", hasStats
       ? "GDP " + fmtUSD(st.gdp) + " &middot; Pop " + fmtNum(st.pop) +

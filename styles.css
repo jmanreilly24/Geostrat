@@ -215,6 +215,12 @@ html, body {
   letter-spacing: 0.1em; text-transform: uppercase; margin: 9px 0 2px;
 }
 .card .value { font-size: 14px; color: var(--parchment); }
+.card .card-year {
+  font-family: "IBM Plex Mono", monospace; font-size: 10px;
+  letter-spacing: 0.14em; color: var(--signal); margin-left: 6px;
+  text-transform: none;
+}
+.card #card-active b { color: var(--signal); }
 .card .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .card .wb-link {
   display: inline-block; margin-top: 12px; font-family: "IBM Plex Mono", monospace;
