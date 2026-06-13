@@ -977,7 +977,7 @@
   var HIST_CACHE = {};
   function loadPortwatchYear(y) {
     if (y >= 2026) { refreshPortwatch(); return; }
-    fetch("data/history/portwatch-" + y + ".json", { cache: "force-cache" })
+    fetch("data/history/portwatch-" + y + ".json", { cache: "default" })
       .then(function (r) { if (r.ok) return r.json(); throw 0; })
       .then(function (d) { var s2 = map.getSource("portwatch"); if (s2) s2.setData(d); })
       .catch(function () {
@@ -1001,7 +1001,7 @@
     if (lab) lab.textContent = y;
     function done(d) { POWER_BY_NAME = d; applyYear(); }
     if (HIST_CACHE[y]) { done(HIST_CACHE[y]); return; }
-    fetch("data/history/power-" + y + ".json", { cache: "force-cache" })
+    fetch("data/history/power-" + y + ".json", { cache: "default" })
       .then(function (r) { if (r.ok) return r.json(); throw new Error("no history file"); })
       .then(function (d) { HIST_CACHE[y] = d; done(d); })
       .catch(function () { if (lab) lab.textContent = y + " (n/a)"; applyYear(); });
