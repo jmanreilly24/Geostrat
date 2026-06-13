@@ -31,13 +31,21 @@ def main():
         print("Empty CSV - leaving existing file untouched.")
         sys.exit(0)
     header = rows[0]
-    # columns: Entity, Code, Year, <score column>
+    # columns vary: Entity, Code, Year, <score column>, [region column].
+    # OWID appended "World region according to OWID" as the last column at
+    # some point, so we can't just use header[-1] — match the score column
+    # by name (case-insensitive, "democracy" substring).
     try:
         i_code, i_year = header.index("Code"), header.index("Year")
     except ValueError:
         print("Unexpected header:", header)
         sys.exit(0)
-    i_val = len(header) - 1
+    i_val = next((i for i, h in enumerate(header)
+                  if "democracy" in (h or "").lower()), -1)
+    if i_val < 0:
+        print("Could not locate score column in header:", header)
+        sys.exit(0)
+    print("Using column", i_val, "as score:", header[i_val])
 
     out = {}
     for row in rows[1:]:
