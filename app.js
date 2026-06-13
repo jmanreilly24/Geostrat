@@ -1119,6 +1119,27 @@
   }
   // sub-heading inside a section (e.g. "Defense" vs "Economic & political")
   function sub(title) { return '<h3 class="subhead">' + title + "</h3>"; }
+  // theory row: regular row + info-icon tooltip sourced from window.THEORY_META
+  function theoryRow(key, label, color) {
+    var base = row("chk", key, label, state[key], null, color);
+    var m = (window.THEORY_META || {})[key];
+    if (!m) return base;
+    var safe = function (s) { return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;"); };
+    var tip =
+      '<span class="info-pop" role="tooltip">' +
+        '<b>' + safe(m.name) + '</b>' +
+        ' <span class="info-year">' + safe(m.year) + '</span><br>' +
+        '<i>' + safe(m.theorist) + '</i><br>' +
+        '<span class="info-school">' + safe(m.school) + '</span><br>' +
+        safe(m.desc) +
+      '</span>';
+    var icon = '<button class="info-i" type="button" aria-label="About ' +
+      safe(m.name) + '" data-theory="' + safe(key) + '">i</button>' + tip;
+    // splice the icon+tooltip in just before the closing </label> tag
+    return base.replace(/<\/label>$/, icon + "</label>");
+  }
   // alphabetise rows by their label, ignoring case + leading punctuation, with
   // an optional "anchor" entry (typically "None") forced to the top.
   function alpha(rows, anchor) {
@@ -1222,12 +1243,12 @@
         "Fetched live in-browser (10-15 min refresh). Empty = feed momentarily down.", false) +
 
       sec("theory", "Classical theory",
-        row("chk", "islandchains", "Island Chains (1st-3rd)", state.islandchains, null, "#5BC8FF") +
-        row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
-        row("chk", "deltas", "River deltas (Marshall)", state.deltas, null, "#49C5B6") +
-        row("chk", "shatter", "Shatterbelts (Cohen)", state.shatter, null, "#C44569") +
-        row("chk", "rimland", "Spykman Rimland + offshore", state.rimland, null, "#C8B08A") +
-        row("chk", "pearls", "String of Pearls", state.pearls, null, "#E8E6DF")) +
+        theoryRow("islandchains", "Island Chains (1st-3rd)", "#5BC8FF") +
+        theoryRow("heartland", "Mackinder Heartland (approx.)", "#E8A33D") +
+        theoryRow("deltas", "River deltas (Marshall)", "#49C5B6") +
+        theoryRow("shatter", "Shatterbelts (Cohen)", "#C44569") +
+        theoryRow("rimland", "Spykman Rimland + offshore", "#C8B08A") +
+        theoryRow("pearls", "String of Pearls", "#E8E6DF")) +
 
       sec("resources", "Natural resources",
         resourceRows +
@@ -1275,6 +1296,26 @@
         var body = byId("sec-" + h.getAttribute("data-sec"));
         if (body) body.classList.toggle("collapsed");
       });
+    });
+
+    // theory info-icon: tap to toggle (hover is handled by CSS). The button
+    // sits inside the row <label>, so we must stop the click from also
+    // toggling the parent checkbox.
+    rail.addEventListener("click", function (e) {
+      var btn = e.target.closest && e.target.closest(".info-i");
+      if (!btn) return;
+      e.preventDefault(); e.stopPropagation();
+      var open = btn.getAttribute("aria-expanded") === "true";
+      // close any other open tooltips so they don't pile up
+      Array.prototype.forEach.call(rail.querySelectorAll(".info-i[aria-expanded='true']"),
+        function (b) { if (b !== btn) b.setAttribute("aria-expanded", "false"); });
+      btn.setAttribute("aria-expanded", open ? "false" : "true");
+    });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") {
+        Array.prototype.forEach.call(rail.querySelectorAll(".info-i[aria-expanded='true']"),
+          function (b) { b.setAttribute("aria-expanded", "false"); });
+      }
     });
 
     byId("cb-terrain3d").onchange = function (e) {
