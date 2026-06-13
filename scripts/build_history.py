@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""
+Build historical World Bank snapshots: data/history/power-YYYY.json for
+2016..2025, same shape as power-index.json. Annual data (World Bank does not
+publish 6-month indicator steps). Run once via the Action; re-run any time.
+"""
+
+import json, os, sys, urllib.request
+
+sys.path.insert(0, os.path.dirname(__file__))
+from update_power import INDICATORS, COMPOSITE_KEYS, NAME_BY_ISO3, UA  # reuse
+
+BASE = ("https://api.worldbank.org/v2/country/all/indicator/{code}"
+        "?format=json&per_page=400&date={year}")
+OUTDIR = os.path.join(os.path.dirname(__file__), "..", "data", "history")
+YEARS = range(2016, 2026)
+
+
+def get(url):
+    req = urllib.request.Request(url, headers=UA)
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def fetch_year(code, year):
+    payload = get(BASE.format(code=code, year=year))
+    rows = payload[1] if isinstance(payload, list) and len(payload) > 1 else []
+    vals, world = {}, None
+    for row in rows or []:
+        iso3, val = row.get("countryiso3code"), row.get("value")
+        if val is None:
+            continue
+        if iso3 == "WLD":
+            world = float(val)
+        elif iso3 in NAME_BY_ISO3:
+            vals[iso3] = float(val)
+    if not world:
+        world = sum(vals.values()) or 1.0
+    return vals, world
+
+
+def main():
+    os.makedirs(OUTDIR, exist_ok=True)
+    for year in YEARS:
+        raw, world, ok = {}, {}, 0
+        for key, codes in INDICATORS.items():
+            raw[key], world[key] = {}, 1.0
+            for code in codes:
+                try:
+                    raw[key], world[key] = fetch_year(code, year)
+                    ok += 1
+                    break
+                except Exception as e:
+                    print(year, key, code, "failed:", e)
+        out = {}
+        for iso3, name in NAME_BY_ISO3.items():
+            shares = []
+            for k in COMPOSITE_KEYS:
+                v = raw.get(k, {}).get(iso3)
+                if v is not None and world.get(k):
+                    shares.append(v / world[k])
+            entry = {"iso3": iso3}
+            if shares:
+                entry["composite"] = round(sum(shares) / len(shares), 4)
+            for k in ("gdp", "gdppc", "pop", "milex", "milper", "renew",
+                      "gini", "trade", "tradeusd"):
+                v = raw.get(k, {}).get(iso3)
+                if v is not None:
+                    entry[k] = round(v) if k != "trade" else round(v, 2)
+            if len(entry) > 1:
+                out[name] = entry
+        path = os.path.join(OUTDIR, "power-%d.json" % year)
+        with open(path, "w") as f:
+            json.dump(out, f, separators=(",", ":"), sort_keys=True)
+        print(year, ":", len(out), "countries,", ok, "indicators")
+
+
+if __name__ == "__main__":
+    main()

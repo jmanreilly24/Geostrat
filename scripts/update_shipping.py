@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """IMF PortWatch chokepoint transits -> data/portwatch.json. Fails safe."""
 
-import json, os, sys, urllib.parse, urllib.request
+import datetime, json, os, sys, urllib.parse, urllib.request
 from collections import defaultdict
 
 BASE = "https://services9.arcgis.com/weJ1QsnbMYJlCHdG/arcgis/rest/services/"
@@ -83,7 +83,7 @@ def main():
         sys.exit(0)
 
     with open(OUT, "w") as f:
-        json.dump({"type": "FeatureCollection", "features": out}, f,
+        json.dump({"type": "FeatureCollection", "fetched": datetime.date.today().isoformat(), "features": out}, f,
                   separators=(",", ":"))
     print("Wrote", len(out), "chokepoints (7-day avg transits)")
 

@@ -111,6 +111,27 @@ window.MEMBERSHIPS = {
   ]
 };
 
+/* ---- MEMBERSHIP CHANGES 2016-2026 (drives the YEAR slider) -----------------
+   joins: country -> year joined (member only from that year)
+   leaves: country -> year left (member only BEFORE that year)               */
+window.MEMBERSHIP_CHANGES = {
+  nato: { joins: { "Montenegro": 2017, "North Macedonia": 2020,
+                   "Finland": 2023, "Sweden": 2024 } },
+  eu: { leaves: { "United Kingdom": 2020 } },
+  brics: { joins: { "Egypt": 2024, "Ethiopia": 2024, "Iran": 2024,
+                    "United Arab Emirates": 2024, "Saudi Arabia": 2024,
+                    "Indonesia": 2025 } },
+  sco: { joins: { "India": 2017, "Pakistan": 2017, "Iran": 2023, "Belarus": 2024 } },
+  aukus: { founded: 2021 },
+  quad: { founded: 2017 },
+  opecPlus: { founded: 2017, leaves: { "Qatar": 2019, "Ecuador": 2020, "Angola": 2024 } },
+  asean: { joins: { "Timor-Leste": 2025 } },
+  arabLeague: { joins: { "Syria": 2023 } }, // readmitted 2023 (suspended 2011)
+  au: { joins: { "Morocco": 2017 } },
+  commonwealth: { joins: { "Gabon": 2022, "Togo": 2022 } },
+  mercosur: { joins: { "Bolivia": 2024 } }
+};
+
 /* ---- SPYKMAN RIMLAND (editorial — refine freely) ------------------------- */
 window.RIMLAND = [
   "Norway","Sweden","Finland","Denmark","Germany","Netherlands","Belgium",
@@ -211,13 +232,22 @@ window.NAME_ALIASES = {
 /* ---- NUCLEAR ARSENAL DETAIL (FAS-style estimates, editable) ----------------
    wh: est. total warheads · icbm: intercontinental-range delivery · h: thermonuclear */
 window.NUCLEAR_INFO = {
-  "Russia":         { wh: 5580, icbm: true,  h: true  },
-  "United States":  { wh: 5044, icbm: true,  h: true  },
-  "China":          { wh: 600,  icbm: true,  h: true  },
-  "France":         { wh: 290,  icbm: true,  h: true  },
-  "United Kingdom": { wh: 225,  icbm: true,  h: true  },
-  "India":          { wh: 172,  icbm: true,  h: true  },  // thermonuclear claim contested
-  "Pakistan":       { wh: 170,  icbm: false, h: false },
-  "Israel":         { wh: 90,   icbm: false, h: false }, // undeclared; capabilities unconfirmed
-  "North Korea":    { wh: 50,   icbm: true,  h: true  }  // claimed thermonuclear (2017 test)
+  /* hist: FAS-style inventory estimates, [year, warheads]; values approximate.
+     icbmY/hY: year capability (intercontinental / thermonuclear) attained
+     within the window; omit if held throughout. */
+  "Russia":         { wh: 5580, icbm: true, h: true,
+    hist: [[2016,7300],[2018,6850],[2020,6375],[2022,5977],[2024,5580]] },
+  "United States":  { wh: 5044, icbm: true, h: true,
+    hist: [[2016,6970],[2018,6450],[2020,5800],[2022,5428],[2024,5044]] },
+  "China":          { wh: 600, icbm: true, h: true,
+    hist: [[2016,260],[2019,290],[2021,350],[2023,410],[2024,500],[2025,600]] },
+  "France":         { wh: 290, icbm: true, h: true, hist: [[2016,300],[2020,290]] },
+  "United Kingdom": { wh: 225, icbm: true, h: true, hist: [[2016,215],[2021,225]] },
+  "India":          { wh: 172, icbm: true, h: true, // thermonuclear claim contested
+    hist: [[2016,110],[2019,130],[2021,156],[2023,164],[2024,172]] },
+  "Pakistan":       { wh: 170, icbm: false, h: false,
+    hist: [[2016,130],[2019,150],[2021,165],[2024,170]] },
+  "Israel":         { wh: 90, icbm: false, h: false, hist: [[2016,80],[2020,90]] }, // undeclared
+  "North Korea":    { wh: 50, icbm: true, h: true, icbmY: 2017, hY: 2017,
+    hist: [[2016,10],[2018,20],[2020,35],[2022,40],[2024,50]] }
 };

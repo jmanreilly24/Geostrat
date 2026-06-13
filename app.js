@@ -181,7 +181,7 @@
     hillshade: true, fill: "tier", stat: "none",
     heat: true, heartland: false, rimland: false, nuclear: false,
     chokepoints: true, newspulse: false, lanes: false, portwatch: false, bri: false,
-    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, radar: false, clouds: false, deltas: false
+    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false, radar: false, clouds: false, deltas: false, terrain3d: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
 
@@ -228,8 +228,32 @@
       });
   }
 
+  var CUR_YEAR = 2026;
   /* attach classifications to each country polygon */
-  function inSet(b) { var s = {}; (window.MEMBERSHIPS[b] || []).forEach(function (k) { s[k] = 1; }); return s; }
+  function membershipListAt(b, year) {
+    var list = (window.MEMBERSHIPS[b] || []).slice();
+    var ch = (window.MEMBERSHIP_CHANGES || {})[b] || {};
+    if (ch.founded && year < ch.founded) return [];
+    if (ch.joins) list = list.filter(function (c) { return !(ch.joins[c] && ch.joins[c] > year); });
+    if (ch.leaves) Object.keys(ch.leaves).forEach(function (c) {
+      if (year < ch.leaves[c] && list.indexOf(c) < 0) list.push(c);
+    });
+    return list;
+  }
+  function inSet(b) { var s = {}; membershipListAt(b, CUR_YEAR).forEach(function (k) { s[k] = 1; }); return s; }
+  function whAt(name, year) {
+    var ni = (window.NUCLEAR_INFO || {})[name];
+    if (!ni) return 0;
+    var v = 0;
+    (ni.hist || [[year, ni.wh]]).forEach(function (h) { if (h[0] <= year) v = h[1]; });
+    return v || (ni.hist && ni.hist[0] && year >= ni.hist[0][0] ? ni.hist[0][1] : (year >= 2016 ? ni.wh : 0));
+  }
+  function conflictsAt(name, year) {
+    return (window.CONFLICTS || []).filter(function (cf) {
+      return cf.parties.indexOf(name) >= 0 &&
+             (cf.sinceY || 0) <= year && year <= (cf.untilY || 9999);
+    });
+  }
   function listSet(arr) { var s = {}; (arr || []).forEach(function (k) { s[k] = 1; }); return s; }
   function decorate(geo) {
     var blocSets = {};
@@ -246,8 +270,10 @@
       f.properties.rimland = !!(key && rim[key]);
       f.properties.nuclear = !!(key && nuc[key]);
       var ni = (window.NUCLEAR_INFO || {})[f.properties.cname];
-      f.properties.nicbm = !!(ni && ni.icbm);
-      f.properties.nh = !!(ni && ni.h);
+      var nwh = whAt(f.properties.cname, CUR_YEAR);
+      f.properties.nuclear = f.properties.nuclear && nwh > 0;
+      f.properties.nicbm = !!(ni && ni.icbm && !(ni.icbmY && ni.icbmY > CUR_YEAR));
+      f.properties.nh = !!(ni && ni.h && !(ni.hY && ni.hY > CUR_YEAR));
       var st = powerOf(f.properties.cname);
       f.properties.composite = st.composite || 0;
       f.properties.renew = st.renew || 0;
@@ -257,11 +283,8 @@
       f.properties.relig = (window.RELIGION || {})[f.properties.cname] || "none";
       f.properties.trader = (window.TRADE_PARTNER || {})[f.properties.cname] || "none";
       f.properties.offshore = !!(key && listSet(window.RIMLAND_OFFSHORE)[key]);
-      var ct = "";
-      (window.CONFLICTS || []).forEach(function (cf) {
-        if (cf.parties.indexOf(f.properties.cname) >= 0 && !ct) ct = cf.type;
-      });
-      f.properties.conflict = ct;
+      var cfs = conflictsAt(f.properties.cname, CUR_YEAR);
+      f.properties.conflict = cfs.length ? cfs[0].type : "";
     });
   }
 
@@ -290,7 +313,7 @@
         properties: { cname: f.properties.cname, pop: st.pop || 0, gdp: st.gdp || 0,
           gdppc: st.gdppc || 0, milex: st.milex || 0, milper: st.milper || 0,
           renew: st.renew || 0, r: 0,
-          nwh: ((window.NUCLEAR_INFO || {})[f.properties.cname] || {}).wh || 0 },
+          nwh: whAt(f.properties.cname, CUR_YEAR) },
         geometry: { type: "Point", coordinates: c } });
     });
     return fc(feats);
@@ -756,6 +779,7 @@
       f.properties.pop = st.pop || 0; f.properties.gdp = st.gdp || 0;
       f.properties.gdppc = st.gdppc || 0; f.properties.milex = st.milex || 0;
       f.properties.milper = st.milper || 0; f.properties.renew = st.renew || 0;
+      f.properties.nwh = whAt(f.properties.cname, CUR_YEAR);
     });
     if (state.stat !== "none") switchStat(state.stat);
     else { var s = map.getSource("country-points"); if (s) s.setData(COUNTRY_POINTS_GEO); }
@@ -803,6 +827,56 @@
   }
   setInterval(loadWeather, 600000);
 
+  /* ---- temporal: load a historical World Bank year ------------------------ */
+  var HIST_CACHE = {};
+  function applyYear() {
+    decorate(COUNTRIES_GEO);
+    var src = map.getSource("countries"); if (src) src.setData(COUNTRIES_GEO);
+    rebuildStats(); clearAllies(); clearAdversaries(); clearBases(); updateLegend();
+  }
+  function setYear(y) {
+    CUR_YEAR = y;
+    var lab = byId("t-yearv");
+    if (y >= 2026) {
+      if (lab) lab.textContent = "LIVE";
+      refreshPower(); applyYear();
+      return;
+    }
+    if (lab) lab.textContent = y;
+    function done(d) { POWER_BY_NAME = d; applyYear(); }
+    if (HIST_CACHE[y]) { done(HIST_CACHE[y]); return; }
+    fetch("data/history/power-" + y + ".json", { cache: "force-cache" })
+      .then(function (r) { if (r.ok) return r.json(); throw new Error("no history file"); })
+      .then(function (d) { HIST_CACHE[y] = d; done(d); })
+      .catch(function () { if (lab) lab.textContent = y + " (n/a)"; applyYear(); });
+  }
+
+  /* ---- in-browser GDELT news pulse (15-min refresh while on) -------------- */
+  var pulseTimer = null;
+  function loadPulse() {
+    var url = "https://api.gdeltproject.org/api/v2/geo/geo?query=" +
+      encodeURIComponent("(conflict OR military OR sanctions OR protest)") +
+      "&mode=PointData&format=GeoJSON&timespan=1440";
+    fetch(url, { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.features) {
+          d.features.forEach(function (f) {
+            f.properties = f.properties || {};
+            f.properties.w = Math.min(1, Math.log10((f.properties.count || 1) + 1) / 3);
+          });
+          var s2 = map.getSource("newspulse"); if (s2) s2.setData(d);
+        }
+      }).catch(function (e) { console.error("news pulse:", e); });
+  }
+  function setPulse(on) {
+    state.newspulse = on; setVis("newspulse", on);
+    if (on) {
+      loadPulse();
+      if (!pulseTimer) pulseTimer = setInterval(function () { if (state.newspulse) loadPulse(); }, 15 * 60 * 1000);
+    }
+  }
+
   /* ---- live precipitation radar (RainViewer, ~10-min frames) -------------- */
   var radarTimer = null;
   function loadRadar() {
@@ -817,14 +891,15 @@
         if (map.getSource("radar")) map.removeSource("radar");
         map.addSource("radar", { type: "raster", tiles: [url], tileSize: 256,
           attribution: "Radar: RainViewer" });
+        var beforeR = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
         map.addLayer({ id: "radar", type: "raster", source: "radar",
-          paint: { "raster-opacity": 0.62 } }, "chokepoint-dot");
+          paint: { "raster-opacity": 0.62 } }, beforeR);
         setVis("radar", state.radar);
       })
       .catch(function () {});
   }
   function loadClouds() {
-    fetch("https://api.rainviewer.com/public/weather-maps.json")
+    fetch("https://api.rainviewer.com/public/weather-maps.json", { cache: "no-store" })
       .then(function (r) { return r.json(); })
       .then(function (d) {
         var frames = (d && d.satellite && d.satellite.infrared) || [];
@@ -835,10 +910,11 @@
         if (map.getSource("clouds")) map.removeSource("clouds");
         map.addSource("clouds", { type: "raster", tiles: [url], tileSize: 256,
           attribution: "Satellite: RainViewer" });
+        var beforeC = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
         map.addLayer({ id: "clouds", type: "raster", source: "clouds",
-          paint: { "raster-opacity": 0.5 } }, "chokepoint-dot");
+          paint: { "raster-opacity": 0.5 } }, beforeC);
         setVis("clouds", state.clouds);
-      }).catch(function () {});
+      }).catch(function (e) { console.error("clouds feed:", e); });
   }
   function setClouds(on) {
     state.clouds = on;
@@ -864,7 +940,7 @@
     var mil = {}, econ = {};
     function collect(keys, into) {
       (keys || []).forEach(function (k) {
-        var list = (window.MEMBERSHIPS || {})[k] || [];
+        var list = membershipListAt(k, CUR_YEAR);
         if (list.indexOf(name) >= 0)
           list.forEach(function (c) { if (c !== name) into[c] = 1; });
       });
@@ -949,7 +1025,9 @@
     rail.innerHTML =
       '<button class="reset" id="btn-reset">All layers off</button>' +
       sec("base", "Base",
-        row("chk", "hillshade", "Terrain &amp; elevation", state.hillshade)) +
+        row("chk", "hillshade", "Terrain &amp; elevation", state.hillshade) +
+        row("chk", "terrain3d", "3D topography (relief)", state.terrain3d) +
+        '<p class="hint">3D relief is most visible zoomed in; combine with FLAT mode for best results.</p>') +
 
       sec("fill", "Country fill — choose one",
         row("rad", "fill-none", "None", state.fill === "none", "fillgrp") +
@@ -987,14 +1065,14 @@
         row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6") +
         row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4") +
         row("chk", "bri", "Belt &amp; Road corridors", state.bri, null, "#E8A33D") +
-        '<p class="hint">Solid = operational; dashed = planned/ongoing. Gold dots = ports, light = key cities.</p>',
+        '<p class="hint">Solid = operational; dashed = planned/ongoing. Gold dots = ports, light = key cities. 2026 snapshot (not year-adjusted).</p>',
         "Rings sized by 7-day avg daily transits, updated weekly.") +
 
       sec("signals", "Live signals — stack",
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
         row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF") +
         row("chk", "clouds", "Cloud cover IR (live)", state.clouds, null, "#8A93A6"),
-        "News-mention geography, refreshed every few hours. Noisy by nature.", false) +
+        "News-mention geography from GDELT, fetched live in your browser (15-min refresh). Noisy by nature; if empty, the feed may be momentarily down.", false) +
 
       sec("theory", "Classical theory",
         row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
@@ -1012,7 +1090,7 @@
         row("chk", "allymode", "Ally highlight on click", state.allymode, null, "#FFD633") +
         row("chk", "advmode", "Adversary highlight on click", state.advmode, null, "#FF4D4D") +
         row("chk", "basesmode", "Military bases on click", state.basesmode, null, "#FFD633"),
-        "Click a country: military allies blue, economic green, adversaries red.") +
+        "Click a country: military allies blue, economic green, adversaries red. Blocs follow the YEAR slider; bases/pacts are 2026 snapshots.") +
 
       sec("ref", "Reference — stack",
         row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D")) +
@@ -1021,7 +1099,7 @@
     byId("btn-reset").onclick = function () {
       state.fill = "none"; state.stat = "none";
       ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
-       "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas"].forEach(function (k) { state[k] = false; });
+       "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas","terrain3d"].forEach(function (k) { state[k] = false; });
       BLOCS.forEach(function (b) { state[b.key] = false; });
       applyFill(); switchStat("none");
       [["hillshade",["hillshade"]],["heat",["conflict-heat"]],
@@ -1036,7 +1114,7 @@
        ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]]
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
       BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
-      clearAllies(); clearAdversaries(); clearBases(); setRadar(false); setClouds(false);
+      clearAllies(); clearAdversaries(); clearBases(); setRadar(false); setClouds(false); try { map.setTerrain(null); } catch (e) {}
       buildRail(); updateLegend(); tele();
     };
 
@@ -1049,6 +1127,13 @@
       });
     });
 
+    byId("cb-terrain3d").onchange = function (e) {
+      state.terrain3d = e.target.checked;
+      try {
+        map.setTerrain(state.terrain3d ? { source: "dem", exaggeration: 1.5 } : null);
+      } catch (err) { console.error("terrain:", err); }
+      tele();
+    };
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
     ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); tele(); } };
@@ -1060,7 +1145,7 @@
       byId("cb-" + b.key).onchange = function (e) { state[b.key] = e.target.checked; setVis("bloc-" + b.key, state[b.key]); tele(); };
     });
     byId("cb-heat").onchange = function (e) { state.heat = e.target.checked; setVis("conflict-heat", state.heat); tele(); };
-    byId("cb-newspulse").onchange = function (e) { state.newspulse = e.target.checked; setVis("newspulse", state.newspulse); tele(); };
+    byId("cb-newspulse").onchange = function (e) { setPulse(e.target.checked); tele(); };
     byId("cb-radar").onchange = function (e) { setRadar(e.target.checked); tele(); };
     byId("cb-clouds").onchange = function (e) { setClouds(e.target.checked); tele(); };
     byId("cb-radar").onchange = function (e) { state.radar = e.target.checked; setVis("wx-radar", state.radar); tele(); };
@@ -1133,6 +1218,21 @@
     tele();
   }
 
+  function fillVintage() {
+    var wb = ["power", "renew", "milex", "gini", "trade"];
+    if (wb.indexOf(state.fill) >= 0 || state.stat !== "none") {
+      if (CUR_YEAR >= 2026) {
+        var m = POWER_BY_NAME && POWER_BY_NAME._meta;
+        return "World Bank, latest per country" + (m && m.fetched ? " \u00B7 fetched " + m.fetched : "");
+      }
+      return "World Bank, year " + CUR_YEAR;
+    }
+    if (state.fill === "tier" || state.fill === "role") return "Editorial, 2026 snapshot";
+    if (state.fill === "religion") return "Editorial, ~2024 estimates";
+    if (state.fill === "trader") return "Editorial, 2024-25 trade pattern (not year-adjusted)";
+    if (state.fill === "conflict") return (window.CONFLICTS_VINTAGE || "Editorial") + " \u00B7 era-bounded by YEAR";
+    return "";
+  }
   function updateLegend() {
     var el = byId("legend");
     var items = state.fill === "tier"
@@ -1210,6 +1310,9 @@
       } catch (e) {}
     })();
 
+    var ty = byId("t-year");
+    if (ty) ty.oninput = function () { setYear(parseInt(ty.value, 10)); };
+
     var tp = byId("t-proj");
     if (tp) tp.onclick = function () {
       state.flat = !state.flat;
@@ -1281,9 +1384,7 @@
         (ni.h ? "thermonuclear" : "fission") + "</span>";
     }
 
-    var confs = (window.CONFLICTS || []).filter(function (cf) {
-      return cf.parties.indexOf(p.cname) >= 0;
-    });
+    var confs = conflictsAt(p.cname, CUR_YEAR);
     setHTML("card-conflict", confs.length ? confs.map(function (cf) {
       return "<b>" + cf.name + "</b> (" + cf.type + ", since " + cf.since + ")<br>" +
              cf.cause + "<br>" + cf.casualties +

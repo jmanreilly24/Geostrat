@@ -191,3 +191,8 @@ html, body {
   .card { width: calc(100vw - 36px); }
   .telemetry { display: none; }
 }
+
+.tele .yearctl input[type=range] {
+  width: 92px; vertical-align: middle; accent-color: var(--signal);
+  background: transparent; cursor: pointer;
+}

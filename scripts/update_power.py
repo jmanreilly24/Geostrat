@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pull World Bank indicators -> data/power-index.json (per-country stats + composite)."""
 
-import json, os, sys, urllib.request
+import datetime, json, os, sys, urllib.request
 
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "power-index.json")
 BASE = "https://api.worldbank.org/v2/country/all/indicator/{code}?format=json&per_page=400&mrnev=1"
@@ -149,6 +149,7 @@ def main():
         print("No values computed — leaving existing file untouched.")
         sys.exit(0)
 
+    out["_meta"] = {"fetched": datetime.date.today().isoformat()}
     with open(OUT, "w") as f:
         json.dump(out, f, separators=(",", ":"), sort_keys=True)
     print("Wrote stats for", len(out), "countries from", ok, "indicators")
