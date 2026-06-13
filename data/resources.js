@@ -54,14 +54,28 @@ window.RESOURCE_TYPES = [
 ];
 
 /* Countries/territories hosting US bases or installations (after Vine 2021 /
-   IBON 2025 infographic: 82 countries & territories, 742 bases). Editable. */
+   IBON 2025 infographic: ~82 countries & territories, 742+ bases).
+   Editorial — edit freely. Note: small territories (Guam, Diego Garcia,
+   American Samoa, Northern Mariana Is., Aruba, Curaçao) only highlight on
+   the map if the basemap geometry actually carries a feature for them. */
 window.USBASE_HOSTS = [
+  /* Europe (NATO + Nordic + Greenland) */
   "Germany","United Kingdom","Italy","Spain","Portugal","Netherlands","Belgium",
-  "Luxembourg","Norway","Denmark","Iceland","Greece","Turkey","Poland","Romania",
-  "Bulgaria","Hungary","Estonia","Latvia","Lithuania","Slovakia","Kosovo",
-  "Greenland","Israel","Jordan","Egypt","Saudi Arabia","United Arab Emirates",
-  "Qatar","Bahrain","Kuwait","Oman","Iraq","Syria","Djibouti","Kenya","Somalia",
-  "Cameroon","Ghana","Senegal","Tunisia","Japan","South Korea","Philippines",
-  "Thailand","Singapore","Australia","Marshall Is.","Palau","Papua New Guinea",
-  "Bahamas","Cuba","Honduras","El Salvador","Peru","Chile","Colombia","Aruba"
+  "Luxembourg","Norway","Denmark","Iceland","Sweden","Finland","Greece","Turkey",
+  "Poland","Romania","Bulgaria","Hungary","Estonia","Latvia","Lithuania",
+  "Slovakia","Czechia","North Macedonia","Kosovo","Cyprus","Greenland",
+  /* Middle East & North Africa */
+  "Israel","Jordan","Egypt","Saudi Arabia","United Arab Emirates","Qatar",
+  "Bahrain","Kuwait","Oman","Iraq","Syria","Tunisia",
+  /* Sub-Saharan Africa (CJTF-HOA + AFRICOM cooperative locations) */
+  "Djibouti","Kenya","Somalia","Cameroon","Ghana","Senegal","Niger","Chad",
+  "Mali","Mauritania","Gabon","Burkina Faso","Uganda","Botswana",
+  /* Indo-Pacific (sovereign hosts + US/UK territories) */
+  "Japan","South Korea","Philippines","Thailand","Singapore","Australia",
+  "Marshall Is.","Palau","Papua New Guinea","Guam","Diego Garcia",
+  "American Samoa","Northern Mariana Is.",
+  /* Latin America & Caribbean */
+  "Bahamas","Cuba","Honduras","El Salvador","Guatemala","Panama","Peru","Chile",
+  "Colombia","Brazil","Ecuador","Aruba","Curacao","Antigua and Barb.",
+  "Trinidad and Tobago"
 ];
