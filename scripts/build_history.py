@@ -41,6 +41,14 @@ def fetch_year(code, year):
 
 def main():
     os.makedirs(OUTDIR, exist_ok=True)
+    # Per-metric, per-country forward-fill cache. World Bank often publishes a
+    # given indicator with a 2-3 year lag (renewables especially), so the most
+    # recent history files come back nearly empty. We carry the last-seen value
+    # forward so the year slider keeps rendering, while logging when a fill
+    # happened so users / debuggers can see the data isn't truly fresh.
+    last_seen = {k: {} for k in INDICATORS}
+    last_world = {k: None for k in INDICATORS}
+
     for year in YEARS:
         raw, world, ok = {}, {}, 0
         for key, codes in INDICATORS.items():
@@ -56,6 +64,25 @@ def main():
                     print(year, key, code, "failed:", e)
             else:
                 print(year, key, "ALL candidates failed:", codes)
+
+            # forward-fill: any country missing from this year inherits the
+            # last value we saw. Then update the cache with the new year's
+            # data so it carries forward again next iteration.
+            filled = 0
+            for iso3, prev in last_seen[key].items():
+                if iso3 not in raw[key]:
+                    raw[key][iso3] = prev
+                    filled += 1
+            if filled:
+                print(year, key, "forward-filled", filled, "countries from prior year")
+            last_seen[key].update(raw[key])
+            # carry the world total forward too, so per-country shares stay
+            # comparable when the latest year's WLD value is missing.
+            if world[key] and world[key] != 1.0:
+                last_world[key] = world[key]
+            elif last_world[key]:
+                world[key] = last_world[key]
+
         out = {}
         for iso3, name in NAME_BY_ISO3.items():
             shares = []

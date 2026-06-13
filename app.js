@@ -231,7 +231,6 @@
           .then(function (r) { if (r.ok) return r.json(); throw 0; })
           .then(function (d) { VDEM = d; applyYear(); })
           .catch(function () {});
-        loadWeather();
         buildRail();
         wireInteraction();
         byId("overlay").classList.add("hide");
@@ -969,31 +968,10 @@
       .catch(function () { /* layer stays empty until the Action runs */ });
   }
 
-  /* live weather tiles (RainViewer, ~10-min updates, no key) */
-  function loadWeather() {
-    fetch("https://api.rainviewer.com/public/weather-maps.json")
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        var jobs = [
-          ["radar", (d.radar && d.radar.past || []).slice(-1)[0], "/256/{z}/{x}/{y}/2/1_1.png", 0.7],
-          ["clouds", (d.satellite && d.satellite.infrared || []).slice(-1)[0], "/256/{z}/{x}/{y}/0/0_0.png", 0.35]
-        ];
-        jobs.forEach(function (j) {
-          var id = "wx-" + j[0];
-          if (!j[1]) return;
-          var tiles = [d.host + j[1].path + j[2]];
-          if (map.getLayer(id)) map.removeLayer(id);
-          if (map.getSource(id)) map.removeSource(id);
-          map.addSource(id, { type: "raster", tiles: tiles, tileSize: 256,
-            attribution: "Weather: RainViewer" });
-          map.addLayer({ id: id, type: "raster", source: id,
-            paint: { "raster-opacity": j[3] },
-            layout: { visibility: state[j[0]] ? "visible" : "none" } },
-            map.getLayer("country-borders") ? "country-borders" : undefined);
-        });
-      }).catch(function () {});
-  }
-  setInterval(loadWeather, 600000);
+  /* Radar + clouds live in setRadar() / setClouds() below; they own their
+     own polling interval and layer ids ("radar", "clouds"). The earlier
+     loadWeather() created duplicate "wx-radar" / "wx-clouds" layers that
+     never got toggled by the rail handlers, so it was dead code. */
 
   /* ---- temporal: load a historical World Bank year ------------------------ */
   var HIST_CACHE = {};
@@ -1029,22 +1007,40 @@
       .catch(function () { if (lab) lab.textContent = y + " (n/a)"; applyYear(); });
   }
 
-  /* ---- in-browser GDELT news pulse (15-min refresh while on) -------------- */
+  /* ---- in-browser GDELT news pulse (15-min refresh while on) --------------
+     Note: the GDELT v2 GEO endpoint (api/v2/geo/geo) was retired and now
+     returns 404. We fetch the DOC ArtList instead and aggregate articles
+     by their `sourcecountry` field, then plot at country centroids. It's
+     a slightly different signal (where the *outlets* writing about it are
+     based, not where the events are physically located), but it's the
+     best per-country proxy GDELT still serves without an API key. */
   var pulseTimer = null;
   function loadPulse() {
-    var url = "https://api.gdeltproject.org/api/v2/geo/geo?query=" +
-      encodeURIComponent("(conflict OR military OR sanctions OR protest)") +
-      "&mode=PointData&format=GeoJSON&timespan=1440";
+    var q = encodeURIComponent("(conflict OR military OR sanctions OR protest)");
+    var url = "https://api.gdeltproject.org/api/v2/doc/doc?query=" + q +
+      "&mode=ArtList&format=json&maxrecords=250&timespan=1d";
     fetch(url, { cache: "no-store" })
-      .then(function (r) { return r.json(); })
+      .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (d) {
-        if (d && d.features) {
-          d.features.forEach(function (f) {
-            f.properties = f.properties || {};
-            f.properties.w = Math.min(1, Math.log10((f.properties.count || 1) + 1) / 3);
-          });
-          var s2 = map.getSource("newspulse"); if (s2) s2.setData(d);
-        }
+        var arts = (d && d.articles) || [];
+        if (!arts.length || !COUNTRY_POINTS_GEO) return;
+        var counts = {};
+        arts.forEach(function (a) {
+          var c = canonical(a.sourcecountry) || a.sourcecountry;
+          if (!c) return;
+          counts[c] = (counts[c] || 0) + 1;
+        });
+        var feats = [];
+        COUNTRY_POINTS_GEO.features.forEach(function (p) {
+          var c = counts[p.properties.cname];
+          if (!c) return;
+          feats.push({ type: "Feature",
+            properties: { count: c, name: p.properties.cname,
+              w: Math.min(1, Math.log10(c + 1) / 3) },
+            geometry: p.geometry });
+        });
+        var s = map.getSource("newspulse");
+        if (s) s.setData({ type: "FeatureCollection", features: feats });
       }).catch(function (e) { console.error("news pulse:", e); });
   }
   function setPulse(on) {
@@ -1077,22 +1073,36 @@
       .catch(function () {});
   }
   function loadClouds() {
-    fetch("https://api.rainviewer.com/public/weather-maps.json", { cache: "no-store" })
-      .then(function (r) { return r.json(); })
-      .then(function (d) {
-        var frames = (d && d.satellite && d.satellite.infrared) || [];
-        if (!frames.length) return;
-        var f = frames[frames.length - 1];
-        var url = d.host + f.path + "/256/{z}/{x}/{y}/0/0_0.png";
+    // RainViewer stopped publishing satellite tiles (satellite.infrared is
+    // always empty as of mid-2026), so the layer is now wired to NASA GIBS'
+    // MODIS Terra true-color daily mosaic. It's a daytime visible composite
+    // rather than IR, but cloud structure reads clearly over land + ocean.
+    // We try today UTC first; if a single probe tile 404s, fall back through
+    // recent days (the daily product publishes a few hours after midnight UTC).
+    function attempt(idx) {
+      if (idx > 4) return;
+      var d = new Date(Date.now() - idx * 24 * 60 * 60 * 1000);
+      var iso = d.toISOString().slice(0, 10);
+      var probe = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
+        "MODIS_Terra_CorrectedReflectance_TrueColor/default/" + iso +
+        "/GoogleMapsCompatible_Level9/2/1/1.jpg";
+      fetch(probe, { method: "HEAD", cache: "no-store" }).then(function (r) {
+        if (!r.ok) { attempt(idx + 1); return; }
+        var url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
+          "MODIS_Terra_CorrectedReflectance_TrueColor/default/" + iso +
+          "/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
         if (map.getLayer("clouds")) map.removeLayer("clouds");
         if (map.getSource("clouds")) map.removeSource("clouds");
-        map.addSource("clouds", { type: "raster", tiles: [url], tileSize: 256,
-          attribution: "Satellite: RainViewer" });
+        map.addSource("clouds", { type: "raster", tiles: [url],
+          tileSize: 256, maxzoom: 9,
+          attribution: "Imagery: NASA EOSDIS GIBS / MODIS Terra" });
         var beforeC = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
         map.addLayer({ id: "clouds", type: "raster", source: "clouds",
-          paint: { "raster-opacity": 0.5 } }, beforeC);
+          paint: { "raster-opacity": 0.55 } }, beforeC);
         setVis("clouds", state.clouds);
-      }).catch(function (e) { console.error("clouds feed:", e); });
+      }).catch(function () { attempt(idx + 1); });
+    }
+    attempt(0);
   }
   function setClouds(on) {
     state.clouds = on;
@@ -1421,8 +1431,6 @@
     byId("cb-newspulse").onchange = function (e) { setPulse(e.target.checked); tele(); };
     byId("cb-radar").onchange = function (e) { setRadar(e.target.checked); tele(); };
     byId("cb-clouds").onchange = function (e) { setClouds(e.target.checked); tele(); };
-    byId("cb-radar").onchange = function (e) { state.radar = e.target.checked; setVis("wx-radar", state.radar); tele(); };
-    byId("cb-clouds").onchange = function (e) { state.clouds = e.target.checked; setVis("wx-clouds", state.clouds); tele(); };
     byId("cb-heartland").onchange = function (e) {
       state.heartland = e.target.checked;
       setVis("zone-heartland-fill", state.heartland); setVis("zone-heartland-line", state.heartland); tele();
