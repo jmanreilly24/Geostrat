@@ -1117,99 +1117,130 @@
            '<div class="secbody' + (startOpen === false ? " collapsed" : "") + '" id="sec-' + id + '">' +
            (hint ? '<p class="hint">' + hint + "</p>" : "") + inner + "</div>";
   }
+  // sub-heading inside a section (e.g. "Defense" vs "Economic & political")
+  function sub(title) { return '<h3 class="subhead">' + title + "</h3>"; }
+  // alphabetise rows by their label, ignoring case + leading punctuation, with
+  // an optional "anchor" entry (typically "None") forced to the top.
+  function alpha(rows, anchor) {
+    var withKey = rows.map(function (r) {
+      var m = r.match(/<span class="label">([\s\S]*?)<\/span>/);
+      var label = (m ? m[1] : "").replace(/&amp;/g, "&").replace(/<[^>]+>/g, "");
+      return { row: r, key: label.toLowerCase().replace(/^[^a-z0-9]+/, "") };
+    });
+    withKey.sort(function (a, b) { return a.key < b.key ? -1 : a.key > b.key ? 1 : 0; });
+    var out = withKey.map(function (e) { return e.row; });
+    if (anchor) {
+      var idx = -1;
+      out.forEach(function (r, i) { if (idx < 0 && r.indexOf('id="cb-' + anchor + '"') >= 0) idx = i; });
+      if (idx > 0) out.unshift(out.splice(idx, 1)[0]);
+    }
+    return out.join("");
+  }
 
   function buildRail() {
     var rail = byId("rail");
-    var defBlocs = BLOCS.filter(function (b) { return b.group === "def"; })
-      .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("");
-    var ecoBlocs = BLOCS.filter(function (b) { return b.group === "eco"; })
-      .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }).join("");
+
+    // Country-fill radios are split across three sections (general / security /
+    // economy) but share name="fillgrp" so only one can be active at a time.
+    var fillsGeneral = [
+      row("rad", "fill-role", "Agent / pivot", state.fill === "role", "fillgrp"),
+      row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp"),
+      row("rad", "fill-gini", "Inequality (Gini)", state.fill === "gini", "fillgrp"),
+      row("rad", "fill-vdem", "Liberal democracy (V-Dem)", state.fill === "vdem", "fillgrp"),
+      row("rad", "fill-religion", "Majority religion", state.fill === "religion", "fillgrp"),
+      row("rad", "fill-milex", "Military spending", state.fill === "milex", "fillgrp"),
+      row("rad", "fill-tier", "Power tier", state.fill === "tier", "fillgrp"),
+      row("rad", "fill-renew", "Renewables (% of grid)", state.fill === "renew", "fillgrp"),
+      row("rad", "fill-trade", "Trade balance (% GDP)", state.fill === "trade", "fillgrp")
+    ];
+    var noneFill = row("rad", "fill-none", "None", state.fill === "none", "fillgrp");
+
+    var defBlocs = alpha(BLOCS.filter(function (b) { return b.group === "def"; })
+      .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }));
+    var ecoBlocs = alpha(BLOCS.filter(function (b) { return b.group === "eco"; })
+      .map(function (b) { return row("chk", b.key, b.label, state[b.key], null, b.color); }));
+    var resourceRows = alpha((window.RESOURCE_TYPES || []).map(function (t) {
+      return row("chk", "res" + t[0], t[1], state["res" + t[0]], null, t[2]);
+    }));
 
     rail.innerHTML =
       '<button class="reset" id="btn-reset">All layers off</button>' +
-      sec("base", "Base",
+      sec("base", "Base map",
         row("chk", "hillshade", "Terrain &amp; elevation", state.hillshade) +
-        row("chk", "terrain3d", "3D topography (relief)", state.terrain3d) +
-        '<p class="hint">3D relief is most visible zoomed in; combine with FLAT mode for best results.</p>') +
+        row("chk", "terrain3d", "3D topography (relief)", state.terrain3d),
+        "3D relief is most visible zoomed in; combine with FLAT mode for best results.") +
 
-      sec("fill", "Country fill — choose one",
-        row("rad", "fill-none", "None", state.fill === "none", "fillgrp") +
-        row("rad", "fill-tier", "Power tier", state.fill === "tier", "fillgrp") +
-        row("rad", "fill-role", "Agent / pivot", state.fill === "role", "fillgrp") +
-        row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp") +
-        row("rad", "fill-renew", "Renewables (% of grid)", state.fill === "renew", "fillgrp") +
-        row("rad", "fill-milex", "Military spending", state.fill === "milex", "fillgrp") +
-        row("rad", "fill-gini", "Inequality (Gini)", state.fill === "gini", "fillgrp") +
-        row("rad", "fill-trade", "Trade balance (% GDP)", state.fill === "trade", "fillgrp") +
-        row("rad", "fill-religion", "Majority religion", state.fill === "religion", "fillgrp") +
-        row("rad", "fill-conflict", "Active conflicts", state.fill === "conflict", "fillgrp") +
-        row("rad", "fill-trader", "Top trade partner: US/China", state.fill === "trader", "fillgrp") +
-        row("rad", "fill-vdem", "Liberal democracy (V-Dem)", state.fill === "vdem", "fillgrp") +
-        row("rad", "fill-usbases", "US military footprint", state.fill === "usbases", "fillgrp") +
+      sec("fill", "Country fills",
+        noneFill + alpha(fillsGeneral) +
         '<div class="legend" id="legend"></div>',
-        "Only one can paint the countries at a time.") +
+        "Choose one — these paint every country.") +
 
-      sec("stats", "Country statistics — choose one",
+      sec("stats", "Statistics",
         row("rad", "stat-none", "None", state.stat === "none", "statgrp") +
-        row("rad", "stat-gdp", "GDP", state.stat === "gdp", "statgrp") +
-        row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp") +
-        row("rad", "stat-milex", "Military spending", state.stat === "milex", "statgrp") +
-        row("rad", "stat-milper", "Military personnel", state.stat === "milper", "statgrp") +
-        row("rad", "stat-pop", "Population", state.stat === "pop", "statgrp") +
-        row("rad", "stat-renew", "Renewables %", state.stat === "renew", "statgrp") +
+        alpha([
+          row("rad", "stat-gdp", "GDP", state.stat === "gdp", "statgrp"),
+          row("rad", "stat-gdppc", "GDP per capita", state.stat === "gdppc", "statgrp"),
+          row("rad", "stat-milper", "Military personnel", state.stat === "milper", "statgrp"),
+          row("rad", "stat-milex", "Military spending", state.stat === "milex", "statgrp"),
+          row("rad", "stat-pop", "Population", state.stat === "pop", "statgrp"),
+          row("rad", "stat-renew", "Renewables %", state.stat === "renew", "statgrp")
+        ]) +
         '<div class="statmode">' +
           row("chk", "statmode-fill", "Render as country fill (choropleth)",
               state.statMode === "fill", null, "#E8A33D") +
         '</div>',
-        "Default: hollow amber rings over the active fill. Toggle to repaint the active stat as a choropleth.") +
+        "Hollow amber rings over the active fill by default; toggle to repaint as a choropleth.") +
 
-      sec("def", "Defense &amp; security — stack", defBlocs, null, false) +
-      sec("eco", "Economic &amp; political — stack", ecoBlocs, null, false) +
+      sec("blocs", "Alliances &amp; blocs",
+        sub("Defense") + defBlocs +
+        sub("Economic &amp; political") + ecoBlocs,
+        "Stackable bloc outlines. Membership follows the YEAR slider.") +
 
-      sec("conflict", "Conflict &amp; tension — stack",
-        row("chk", "heat", "Violence density (sample)", state.heat, null, "#ff6a3d"),
-        "Your editorial tension layer comes next.") +
+      sec("security", "Conflict &amp; security",
+        sub("Choropleth") +
+        row("rad", "fill-conflict", "Active conflicts", state.fill === "conflict", "fillgrp") +
+        row("rad", "fill-usbases", "US military footprint", state.fill === "usbases", "fillgrp") +
+        sub("Stack toggles") +
+        row("chk", "heat", "Violence density (heat)", state.heat, null, "#ff6a3d") +
+        row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A") +
+        '<p class="hint">Nuclear borders: solid = intercontinental, dashed = regional. Green = thermonuclear, lime = fission-only. Labels show est. warheads.</p>') +
 
-      sec("ship", "Economy &amp; connectivity — stack",
-        row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6") +
-        row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4") +
+      sec("econ", "Economy &amp; connectivity",
+        sub("Choropleth") +
+        row("rad", "fill-trader", "Top trade partner: US/China", state.fill === "trader", "fillgrp") +
+        sub("Stack toggles") +
         row("chk", "bri", "Belt &amp; Road corridors", state.bri, null, "#E8A33D") +
-        '<p class="hint">Solid = operational; dashed = planned/ongoing. Gold dots = ports, light = key cities. 2026 snapshot (not year-adjusted).</p>',
-        "Rings sized by 7-day avg daily transits, updated weekly.") +
+        row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D") +
+        row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4") +
+        row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6"),
+        "BRI: solid = operational, dashed = planned. PortWatch rings: 7-day avg daily transits.") +
 
-      sec("signals", "Live signals — stack",
+      sec("signals", "Live signals",
+        row("chk", "clouds", "Cloud cover IR (live)", state.clouds, null, "#8A93A6") +
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
-        row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF") +
-        row("chk", "clouds", "Cloud cover IR (live)", state.clouds, null, "#8A93A6"),
-        "News-mention geography from GDELT, fetched live in your browser (15-min refresh). Noisy by nature; if empty, the feed may be momentarily down.", false) +
+        row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF"),
+        "Fetched live in-browser (10-15 min refresh). Empty = feed momentarily down.", false) +
 
       sec("theory", "Classical theory",
+        row("chk", "islandchains", "Island Chains (1st-3rd)", state.islandchains, null, "#5BC8FF") +
         row("chk", "heartland", "Mackinder Heartland (approx.)", state.heartland, null, "#E8A33D") +
-        row("chk", "rimland", "Spykman Rimland + offshore", state.rimland, null, "#C8B08A") +
-        row("chk", "islandchains", "Island Chains (1st–3rd)", state.islandchains, null, "#5BC8FF") +
-        row("chk", "pearls", "String of Pearls", state.pearls, null, "#E8E6DF") +
+        row("chk", "deltas", "River deltas (Marshall)", state.deltas, null, "#49C5B6") +
         row("chk", "shatter", "Shatterbelts (Cohen)", state.shatter, null, "#C44569") +
-        row("chk", "deltas", "River deltas (Marshall)", state.deltas, null, "#49C5B6")) +
+        row("chk", "rimland", "Spykman Rimland + offshore", state.rimland, null, "#C8B08A") +
+        row("chk", "pearls", "String of Pearls", state.pearls, null, "#E8E6DF")) +
 
-      sec("resources", "Natural resources — stack",
-        (window.RESOURCE_TYPES || []).map(function (t) {
-          return row("chk", "res" + t[0], t[1], state["res" + t[0]], null, t[2]);
-        }).join("") +
-        '<p class="hint">Major deposits/basins (editorial). Geology: constant across YEAR.</p>', null, false) +
+      sec("resources", "Natural resources",
+        resourceRows +
+        '<p class="hint">Major deposits/basins (editorial). Geology: constant across YEAR.</p>',
+        null, false) +
 
-      sec("status", "Status — stack",
-        row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A") +
-        '<p class="hint">Solid border = intercontinental reach; dashed = regional. Green = thermonuclear; lime = fission-only. Labels show est. warheads.</p>') +
+      sec("interact", "Interaction (on click)",
+        row("chk", "advmode", "Adversary highlight", state.advmode, null, "#FF4D4D") +
+        row("chk", "allymode", "Ally highlight", state.allymode, null, "#FFD633") +
+        row("chk", "basesmode", "Military bases", state.basesmode, null, "#FFD633"),
+        "Click a country: military allies blue, economic green, adversaries red.") +
 
-      sec("interact", "Interaction",
-        row("chk", "allymode", "Ally highlight on click", state.allymode, null, "#FFD633") +
-        row("chk", "advmode", "Adversary highlight on click", state.advmode, null, "#FF4D4D") +
-        row("chk", "basesmode", "Military bases on click", state.basesmode, null, "#FFD633"),
-        "Click a country: military allies blue, economic green, adversaries red. Blocs follow the YEAR slider; bases/pacts are 2026 snapshots.") +
-
-      sec("ref", "Reference — stack",
-        row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D")) +
-      '<p class="hint" style="margin-top:12px">Data: Natural Earth \u00B7 RainViewer \u00B7 Open-Meteo · World Bank (CC BY-4.0) · UCDP · IMF PortWatch · OSM/CARTO · AWS Terrain. Conflict synopses: sources per entry.</p>';
+      '<p class="hint" style="margin-top:12px">Data: Natural Earth, RainViewer, Open-Meteo, World Bank (CC BY-4.0), UCDP, IMF PortWatch, OSM/CARTO, AWS Terrain. Conflict synopses: sources per entry.</p>';
 
     byId("btn-reset").onclick = function () {
       state.fill = "none"; state.stat = "none"; state.statMode = "ring";
