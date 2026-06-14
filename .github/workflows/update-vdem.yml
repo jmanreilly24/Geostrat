@@ -13,16 +13,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Fetch V-Dem liberal democracy index
+      - name: Fetch V-Dem indices
         run: python scripts/update_vdem.py
       - name: Commit if changed
         run: |
           if [ ! -f data/vdem.json ]; then
-            echo "No data/vdem.json produced — fetch likely failed. Skipping commit."
+            echo "No data/vdem.json produced - fetch likely failed. Skipping commit."
             exit 0
           fi
           git config user.name "geostrat-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/vdem.json
-          if git diff --staged --quiet; then echo "No changes."; else
-            git commit -m "Update V-Dem libdem $(date -u +%F)"; git push; fi
+          if git diff --staged --quiet; then echo "No changes."; exit 0; fi
+          git commit -m "Update V-Dem indices $(date -u +%F)"
+          for i in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            echo "push attempt $i failed, retrying..."; sleep $((i*5))
+          done
+          echo "could not push after 5 attempts"; exit 1
