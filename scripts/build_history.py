@@ -13,7 +13,7 @@ from update_power import INDICATORS, COMPOSITE_KEYS, NAME_BY_ISO3, UA  # reuse
 BASE = ("https://api.worldbank.org/v2/country/all/indicator/{code}"
         "?format=json&per_page=400&date={year}")
 OUTDIR = os.path.join(os.path.dirname(__file__), "..", "data", "history")
-YEARS = range(2016, 2026)
+YEARS = range(2000, 2026)
 
 
 def get(url):
