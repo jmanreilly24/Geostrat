@@ -1094,31 +1094,33 @@
       .catch(function () {});
   }
   function loadClouds() {
-    // The previous MODIS Terra TRUE COLOR daily mosaic showed visible
-    // orbital swaths because each tile is a strip from a single satellite
-    // pass — on a globe this looked like ragged slices that didn't wrap.
-    // Switch to MODIS_Terra_Cloud_Fraction_Day, a quantitative cloud-cover
-    // mosaic that interpolates across orbits, so the layer reads as a
-    // smooth grayscale cloud-density map that wraps cleanly. Daily product;
-    // walk back up to 4 days if today isn't published yet.
+    // Layer history: RainViewer satellite IR went dead -> tried MODIS Terra
+    // TRUE COLOR but its 2330km swath left visible orbital edges on the globe
+    // -> tried MODIS Terra Cloud Fraction Day but that's a quantitative
+    // rainbow heatmap of cloud %, and the "daily" product only carries the
+    // orbital passes processed so far (one red stripe across the Pacific).
+    // Final pick: VIIRS_SNPP_CorrectedReflectance_TrueColor. Wider 3000km
+    // swath means the daily mosaic actually wraps, and visible-light true
+    // color renders clouds naturally as soft white over land/ocean. Start
+    // 2 days back because the current-day mosaic is usually still building.
     function attempt(idx) {
-      if (idx > 4) return;
-      var d = new Date(Date.now() - idx * 24 * 60 * 60 * 1000);
+      if (idx > 6) return;
+      var d = new Date(Date.now() - (idx + 2) * 24 * 60 * 60 * 1000);
       var iso = d.toISOString().slice(0, 10);
       var base = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
-        "MODIS_Terra_Cloud_Fraction_Day/default/" + iso +
-        "/GoogleMapsCompatible_Level6";
-      fetch(base + "/0/0/0.png", { method: "HEAD", cache: "no-store" }).then(function (r) {
+        "VIIRS_SNPP_CorrectedReflectance_TrueColor/default/" + iso +
+        "/GoogleMapsCompatible_Level9";
+      fetch(base + "/0/0/0.jpg", { method: "HEAD", cache: "no-store" }).then(function (r) {
         if (!r.ok) { attempt(idx + 1); return; }
         if (map.getLayer("clouds")) map.removeLayer("clouds");
         if (map.getSource("clouds")) map.removeSource("clouds");
         map.addSource("clouds", { type: "raster",
-          tiles: [base + "/{z}/{y}/{x}.png"],
-          tileSize: 256, minzoom: 0, maxzoom: 6,
-          attribution: "Clouds: NASA EOSDIS GIBS / MODIS Terra Cloud Fraction (" + iso + ")" });
+          tiles: [base + "/{z}/{y}/{x}.jpg"],
+          tileSize: 256, minzoom: 0, maxzoom: 9,
+          attribution: "Imagery: NASA EOSDIS GIBS / VIIRS SNPP True Color (" + iso + ")" });
         var beforeC = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
         map.addLayer({ id: "clouds", type: "raster", source: "clouds",
-          paint: { "raster-opacity": 0.5 } }, beforeC);
+          paint: { "raster-opacity": 0.55 } }, beforeC);
         setVis("clouds", state.clouds);
       }).catch(function () { attempt(idx + 1); });
     }
@@ -1347,7 +1349,7 @@
         "BRI: solid = operational, dashed = planned. PortWatch rings: 7-day avg daily transits.") +
 
       sec("signals", "Live signals",
-        row("chk", "clouds", "Cloud cover (daily, MODIS)", state.clouds, null, "#8A93A6") +
+        row("chk", "clouds", "Satellite imagery (VIIRS daily)", state.clouds, null, "#8A93A6") +
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
         row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF"),
         "Fetched live in-browser (10-15 min refresh). Empty = feed momentarily down.", false) +
