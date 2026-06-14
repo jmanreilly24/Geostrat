@@ -711,12 +711,19 @@
         "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", visibility: "visible" },
       paint: { "text-color": "#E8E6DF", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
 
-    // GDELT news-pulse — cool dots sized by mention count
+    // GDELT news-pulse — granular per-mention points from the GKG. We get a
+    // few hundred 0.5° grid cells, so the radius/opacity ramp stays small at
+    // the low end (lets dense regions read as glow rather than blobs) and
+    // scales gently into the headlines.
     map.addLayer({ id: "newspulse", type: "circle", source: "newspulse",
       paint: {
-        "circle-radius": ["interpolate", ["linear"], ["get", "count"], 1, 2.5, 50, 9, 500, 16],
-        "circle-color": "#5BC8FF", "circle-opacity": 0.45,
-        "circle-stroke-color": "#0B1020", "circle-stroke-width": 0.5 },
+        "circle-radius": ["interpolate", ["linear"], ["get", "count"],
+          1, 2, 5, 3.5, 25, 6, 100, 9, 300, 13],
+        "circle-color": "#5BC8FF",
+        "circle-opacity": ["interpolate", ["linear"], ["get", "count"],
+          1, 0.35, 5, 0.5, 25, 0.65, 100, 0.8],
+        "circle-blur": 0.25,
+        "circle-stroke-color": "#0B1020", "circle-stroke-width": 0.3 },
       layout: { visibility: "none" } });
 
     // military bases (filtered on click when bases mode is on)
@@ -1036,37 +1043,22 @@
       .catch(function () { if (lab) lab.textContent = y + " (n/a)"; applyYear(); });
   }
 
-  /* ---- in-browser GDELT news pulse (15-min refresh while on) --------------
-     Note: the GDELT v2 GEO endpoint (api/v2/geo/geo) was retired and now
-     returns 404. We fetch the DOC ArtList instead and aggregate articles
-     by their `sourcecountry` field, then plot at country centroids. It's
-     a slightly different signal (where the *outlets* writing about it are
-     based, not where the events are physically located), but it's the
-     best per-country proxy GDELT still serves without an API key. */
+  /* ---- news pulse from data/newspulse.geojson ----------------------------
+     The static file is rebuilt every 6h by update-newspulse.yml from the
+     latest GDELT GKG 2.0 slice (per-mention geocoded locations, not just
+     publishing-outlet centroids), so what we paint here is granular at
+     ~0.5 deg resolution. Toggling the layer or letting the 15-min poller
+     fire just re-fetches the file with cache-busting. */
   var pulseTimer = null;
   function loadPulse() {
-    var q = encodeURIComponent("(conflict OR military OR sanctions OR protest)");
-    var url = "https://api.gdeltproject.org/api/v2/doc/doc?query=" + q +
-      "&mode=ArtList&format=json&maxrecords=250&timespan=1d";
-    fetch(url, { cache: "no-store" })
+    fetch("data/newspulse.geojson?t=" + Date.now(), { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (d) {
-        var arts = (d && d.articles) || [];
-        if (!arts.length || !COUNTRY_POINTS_GEO) return;
-        var counts = {};
-        arts.forEach(function (a) {
-          var c = canonical(a.sourcecountry) || a.sourcecountry;
-          if (!c) return;
-          counts[c] = (counts[c] || 0) + 1;
-        });
-        var feats = [];
-        COUNTRY_POINTS_GEO.features.forEach(function (p) {
-          var c = counts[p.properties.cname];
-          if (!c) return;
-          feats.push({ type: "Feature",
-            properties: { count: c, name: p.properties.cname,
-              w: Math.min(1, Math.log10(c + 1) / 3) },
-            geometry: p.geometry });
+        var feats = (d && d.features) || [];
+        feats.forEach(function (f) {
+          f.properties = f.properties || {};
+          var c = f.properties.count || 1;
+          f.properties.w = Math.min(1, Math.log10(c + 1) / 3);
         });
         var s = map.getSource("newspulse");
         if (s) s.setData({ type: "FeatureCollection", features: feats });
@@ -1102,32 +1094,31 @@
       .catch(function () {});
   }
   function loadClouds() {
-    // RainViewer stopped publishing satellite tiles (satellite.infrared is
-    // always empty as of mid-2026), so the layer is now wired to NASA GIBS'
-    // MODIS Terra true-color daily mosaic. It's a daytime visible composite
-    // rather than IR, but cloud structure reads clearly over land + ocean.
-    // We try today UTC first; if a single probe tile 404s, fall back through
-    // recent days (the daily product publishes a few hours after midnight UTC).
+    // The previous MODIS Terra TRUE COLOR daily mosaic showed visible
+    // orbital swaths because each tile is a strip from a single satellite
+    // pass — on a globe this looked like ragged slices that didn't wrap.
+    // Switch to MODIS_Terra_Cloud_Fraction_Day, a quantitative cloud-cover
+    // mosaic that interpolates across orbits, so the layer reads as a
+    // smooth grayscale cloud-density map that wraps cleanly. Daily product;
+    // walk back up to 4 days if today isn't published yet.
     function attempt(idx) {
       if (idx > 4) return;
       var d = new Date(Date.now() - idx * 24 * 60 * 60 * 1000);
       var iso = d.toISOString().slice(0, 10);
-      var probe = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
-        "MODIS_Terra_CorrectedReflectance_TrueColor/default/" + iso +
-        "/GoogleMapsCompatible_Level9/2/1/1.jpg";
-      fetch(probe, { method: "HEAD", cache: "no-store" }).then(function (r) {
+      var base = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
+        "MODIS_Terra_Cloud_Fraction_Day/default/" + iso +
+        "/GoogleMapsCompatible_Level6";
+      fetch(base + "/0/0/0.png", { method: "HEAD", cache: "no-store" }).then(function (r) {
         if (!r.ok) { attempt(idx + 1); return; }
-        var url = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
-          "MODIS_Terra_CorrectedReflectance_TrueColor/default/" + iso +
-          "/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg";
         if (map.getLayer("clouds")) map.removeLayer("clouds");
         if (map.getSource("clouds")) map.removeSource("clouds");
-        map.addSource("clouds", { type: "raster", tiles: [url],
-          tileSize: 256, maxzoom: 9,
-          attribution: "Imagery: NASA EOSDIS GIBS / MODIS Terra" });
+        map.addSource("clouds", { type: "raster",
+          tiles: [base + "/{z}/{y}/{x}.png"],
+          tileSize: 256, minzoom: 0, maxzoom: 6,
+          attribution: "Clouds: NASA EOSDIS GIBS / MODIS Terra Cloud Fraction (" + iso + ")" });
         var beforeC = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
         map.addLayer({ id: "clouds", type: "raster", source: "clouds",
-          paint: { "raster-opacity": 0.55 } }, beforeC);
+          paint: { "raster-opacity": 0.5 } }, beforeC);
         setVis("clouds", state.clouds);
       }).catch(function () { attempt(idx + 1); });
     }
@@ -1356,7 +1347,7 @@
         "BRI: solid = operational, dashed = planned. PortWatch rings: 7-day avg daily transits.") +
 
       sec("signals", "Live signals",
-        row("chk", "clouds", "Cloud cover IR (live)", state.clouds, null, "#8A93A6") +
+        row("chk", "clouds", "Cloud cover (daily, MODIS)", state.clouds, null, "#8A93A6") +
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
         row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF"),
         "Fetched live in-browser (10-15 min refresh). Empty = feed momentarily down.", false) +
