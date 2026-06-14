@@ -1094,15 +1094,30 @@
       .catch(function () {});
   }
   function loadClouds() {
-    // Layer history: RainViewer satellite IR went dead -> tried MODIS Terra
-    // TRUE COLOR but its 2330km swath left visible orbital edges on the globe
-    // -> tried MODIS Terra Cloud Fraction Day but that's a quantitative
-    // rainbow heatmap of cloud %, and the "daily" product only carries the
-    // orbital passes processed so far (one red stripe across the Pacific).
-    // Final pick: VIIRS_SNPP_CorrectedReflectance_TrueColor. Wider 3000km
-    // swath means the daily mosaic actually wraps, and visible-light true
-    // color renders clouds naturally as soft white over land/ocean. Start
-    // 2 days back because the current-day mosaic is usually still building.
+    // Two-layer imagery stack so the globe always paints fully even when
+    // the daily VIIRS mosaic has antimeridian or orbital seams.
+    //   "clouds-base"  = NASA BlueMarble (static composite, full coverage,
+    //                    looks like Earth from Apollo).
+    //   "clouds"       = VIIRS_SNPP_CorrectedReflectance_TrueColor for the
+    //                    most recent settled date (start 2 days back, walk
+    //                    further if the daily mosaic isn't published yet).
+    // Where today's VIIRS has data we see live clouds; where it has a gap
+    // we fall through to BlueMarble instead of a black wedge.
+    if (!map.getSource("clouds-base")) {
+      map.addSource("clouds-base", { type: "raster",
+        tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
+                "BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/" +
+                "{z}/{y}/{x}.jpg"],
+        tileSize: 256, minzoom: 0, maxzoom: 8,
+        attribution: "Base: NASA EOSDIS GIBS / BlueMarble" });
+    }
+    if (!map.getLayer("clouds-base")) {
+      var beforeBase = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
+      map.addLayer({ id: "clouds-base", type: "raster", source: "clouds-base",
+        paint: { "raster-opacity": 0.55 } }, beforeBase);
+      setVis("clouds-base", state.clouds);
+    }
+
     function attempt(idx) {
       if (idx > 6) return;
       var d = new Date(Date.now() - (idx + 2) * 24 * 60 * 60 * 1000);
@@ -1120,7 +1135,7 @@
           attribution: "Imagery: NASA EOSDIS GIBS / VIIRS SNPP True Color (" + iso + ")" });
         var beforeC = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
         map.addLayer({ id: "clouds", type: "raster", source: "clouds",
-          paint: { "raster-opacity": 0.55 } }, beforeC);
+          paint: { "raster-opacity": 0.85 } }, beforeC);
         setVis("clouds", state.clouds);
       }).catch(function () { attempt(idx + 1); });
     }
@@ -1133,7 +1148,10 @@
       if (!radarTimer) radarTimer = setInterval(function () {
         if (state.radar) loadRadar(); if (state.clouds) loadClouds();
       }, 10 * 60 * 1000);
-    } else if (map.getLayer("clouds")) setVis("clouds", false);
+    } else {
+      if (map.getLayer("clouds")) setVis("clouds", false);
+      if (map.getLayer("clouds-base")) setVis("clouds-base", false);
+    }
   }
   function setRadar(on) {
     state.radar = on;
@@ -1388,7 +1406,7 @@
        ["nuclear",["nuclear-fill","nuclear-line-icbm","nuclear-line-reg","nuclear-label"]],
        ["islandchains",["islandchains-line"]],["pearls",["pearls-line","pearls-dot","pearls-label"]],
        ["shatter",["shatter-fill","shatter-line"]],["deltas",["deltas-fill","deltas-label"]],
-       ["radar",["wx-radar"]],["clouds",["wx-clouds"]],
+       ["radar",["radar"]],["clouds",["clouds","clouds-base"]],
        ["chokepoints",["chokepoint-dot","chokepoint-label"]],
        ["newspulse",["newspulse"]],["lanes",["lanes-glow","lanes-core"]],
        ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]]
