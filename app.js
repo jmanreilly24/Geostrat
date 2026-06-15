@@ -1108,7 +1108,9 @@
         attribution: "Imagery: NASA EOSDIS GIBS / BlueMarble" });
     }
     if (!map.getLayer("clouds-base")) {
-      var beforeBase = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
+      // Insert at the bottom of the layer stack so every other layer
+      // (fills, borders, theory zones, chokepoints, etc.) paints on top.
+      var beforeBase = map.getLayer("fill-tier") ? "fill-tier" : undefined;
       map.addLayer({ id: "clouds-base", type: "raster", source: "clouds-base",
         paint: { "raster-opacity": 1.0 } }, beforeBase);
       setVis("clouds-base", state.clouds);
@@ -1282,6 +1284,7 @@
     rail.innerHTML =
       '<button class="reset" id="btn-reset">All layers off</button>' +
       sec("base", "Base map",
+        row("chk", "clouds", "Satellite imagery (BlueMarble)", state.clouds, null, "#8A93A6") +
         row("chk", "hillshade", "Terrain &amp; elevation", state.hillshade) +
         row("chk", "terrain3d", "3D topography (relief)", state.terrain3d),
         "3D relief is most visible zoomed in; combine with FLAT mode for best results.") +
@@ -1336,7 +1339,6 @@
         "BRI: solid = operational, dashed = planned. PortWatch rings: 7-day avg daily transits.") +
 
       sec("signals", "Live signals",
-        row("chk", "clouds", "Satellite imagery (BlueMarble)", state.clouds, null, "#8A93A6") +
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
         row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF"),
         "Fetched live in-browser (10-15 min refresh). Empty = feed momentarily down.", false) +
