@@ -1094,29 +1094,18 @@
       .catch(function () {});
   }
   function loadClouds() {
-    // Three-layer imagery stack so the globe always paints fully even when
-    // a daily VIIRS mosaic has antimeridian or orbital seams:
-    //
-    //   clouds-base   = NASA BlueMarble (static composite, full coverage,
-    //                   the absolute fallback - never has gaps)
-    //   clouds-aux    = VIIRS_NOAA20_CorrectedReflectance_TrueColor
-    //                   (different orbital phase from SNPP, so its
-    //                    daily gaps fall in different longitudes)
-    //   clouds        = VIIRS_SNPP_CorrectedReflectance_TrueColor (top)
-    //
-    // The VIIRS products are RGB JPEGs - their "no data" pixels are solid
-    // black, which would otherwise cover the BlueMarble underneath. We
-    // run both VIIRS layers at < 1.0 opacity so BlueMarble bleeds through
-    // even where both have black pixels, and we get a softly lit Earth
-    // with live cloud structure on top instead of a black wedge.
-
+    // NASA BlueMarble: a global satellite composite. No orbital seams, no
+    // antimeridian gaps, no polar holes. We tried stacking live VIIRS daily
+    // products on top, but their JPEG no-data pixels are opaque black, and
+    // even at low opacity two layers of black compound into a near-black
+    // wedge through the central Pacific. BlueMarble alone looks clean.
     if (!map.getSource("clouds-base")) {
       map.addSource("clouds-base", { type: "raster",
         tiles: ["https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
                 "BlueMarble_NextGeneration/default/GoogleMapsCompatible_Level8/" +
                 "{z}/{y}/{x}.jpg"],
         tileSize: 256, minzoom: 0, maxzoom: 8,
-        attribution: "Base: NASA EOSDIS GIBS / BlueMarble" });
+        attribution: "Imagery: NASA EOSDIS GIBS / BlueMarble" });
     }
     if (!map.getLayer("clouds-base")) {
       var beforeBase = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
@@ -1124,50 +1113,13 @@
         paint: { "raster-opacity": 1.0 } }, beforeBase);
       setVis("clouds-base", state.clouds);
     }
-
-    function addVIIRS(layerId, product, iso, opacity) {
-      var base = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
-        product + "/default/" + iso + "/GoogleMapsCompatible_Level9";
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getSource(layerId)) map.removeSource(layerId);
-      map.addSource(layerId, { type: "raster",
-        tiles: [base + "/{z}/{y}/{x}.jpg"],
-        tileSize: 256, minzoom: 0, maxzoom: 9,
-        attribution: "Imagery: NASA EOSDIS GIBS / " + product + " (" + iso + ")" });
-      var beforeId = map.getLayer("chokepoint-dot") ? "chokepoint-dot" : undefined;
-      map.addLayer({ id: layerId, type: "raster", source: layerId,
-        paint: { "raster-opacity": opacity } }, beforeId);
-      setVis(layerId, state.clouds);
-    }
-
-    // Find the most recent settled date (one tile probe is enough — both
-    // SNPP and NOAA-20 publish on the same daily cadence).
-    function attempt(idx) {
-      if (idx > 6) return;
-      var d = new Date(Date.now() - (idx + 2) * 24 * 60 * 60 * 1000);
-      var iso = d.toISOString().slice(0, 10);
-      var probe = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/" +
-        "VIIRS_SNPP_CorrectedReflectance_TrueColor/default/" + iso +
-        "/GoogleMapsCompatible_Level9/0/0/0.jpg";
-      fetch(probe, { method: "HEAD", cache: "no-store" }).then(function (r) {
-        if (!r.ok) { attempt(idx + 1); return; }
-        addVIIRS("clouds-aux", "VIIRS_NOAA20_CorrectedReflectance_TrueColor", iso, 0.75);
-        addVIIRS("clouds",     "VIIRS_SNPP_CorrectedReflectance_TrueColor",   iso, 0.75);
-      }).catch(function () { attempt(idx + 1); });
-    }
-    attempt(0);
   }
   function setClouds(on) {
     state.clouds = on;
     if (on) {
       loadClouds();
-      if (!radarTimer) radarTimer = setInterval(function () {
-        if (state.radar) loadRadar(); if (state.clouds) loadClouds();
-      }, 10 * 60 * 1000);
-    } else {
-      ["clouds", "clouds-aux", "clouds-base"].forEach(function (id) {
-        if (map.getLayer(id)) setVis(id, false);
-      });
+    } else if (map.getLayer("clouds-base")) {
+      setVis("clouds-base", false);
     }
   }
   function setRadar(on) {
@@ -1384,7 +1336,7 @@
         "BRI: solid = operational, dashed = planned. PortWatch rings: 7-day avg daily transits.") +
 
       sec("signals", "Live signals",
-        row("chk", "clouds", "Satellite imagery (VIIRS daily)", state.clouds, null, "#8A93A6") +
+        row("chk", "clouds", "Satellite imagery (BlueMarble)", state.clouds, null, "#8A93A6") +
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
         row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF"),
         "Fetched live in-browser (10-15 min refresh). Empty = feed momentarily down.", false) +
@@ -1423,7 +1375,7 @@
        ["nuclear",["nuclear-fill","nuclear-line-icbm","nuclear-line-reg","nuclear-label"]],
        ["islandchains",["islandchains-line"]],["pearls",["pearls-line","pearls-dot","pearls-label"]],
        ["shatter",["shatter-fill","shatter-line"]],["deltas",["deltas-fill","deltas-label"]],
-       ["radar",["radar"]],["clouds",["clouds","clouds-aux","clouds-base"]],
+       ["radar",["radar"]],["clouds",["clouds-base"]],
        ["chokepoints",["chokepoint-dot","chokepoint-label"]],
        ["newspulse",["newspulse"]],["lanes",["lanes-glow","lanes-core"]],
        ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]]
