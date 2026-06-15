@@ -187,9 +187,9 @@
 
   /* ---- state ------------------------------------------------------------ */
   var state = {
-    hillshade: true, fill: "tier", stat: "none", statMode: "ring",
-    heat: true, heartland: false, rimland: false, nuclear: false,
-    chokepoints: true, newspulse: false, lanes: false, portwatch: false, bri: false,
+    hillshade: false, fill: "none", stat: "none", statMode: "ring",
+    heat: false, heartland: false, rimland: false, nuclear: false,
+    chokepoints: false, newspulse: false, lanes: false, portwatch: false, bri: false,
     allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
@@ -1268,7 +1268,7 @@
       row("rad", "fill-religion", "Majority religion", state.fill === "religion", "fillgrp"),
       row("rad", "fill-milex", "Military spending", state.fill === "milex", "fillgrp"),
       row("rad", "fill-tier", "Power tier", state.fill === "tier", "fillgrp"),
-      row("rad", "fill-renew", "Renewables (% of grid)", state.fill === "renew", "fillgrp"),
+      row("rad", "fill-renew", "Renewables (% of total energy)", state.fill === "renew", "fillgrp"),
       row("rad", "fill-trade", "Trade balance (% GDP)", state.fill === "trade", "fillgrp")
     ];
     var noneFill = row("rad", "fill-none", "None", state.fill === "none", "fillgrp");
@@ -1287,12 +1287,12 @@
         row("chk", "clouds", "Satellite imagery (BlueMarble)", state.clouds, null, "#8A93A6") +
         row("chk", "hillshade", "Terrain &amp; elevation", state.hillshade) +
         row("chk", "terrain3d", "3D topography (relief)", state.terrain3d),
-        "3D relief is most visible zoomed in; combine with FLAT mode for best results.") +
+        "3D relief is most visible zoomed in; combine with FLAT mode for best results.", false) +
 
       sec("fill", "Country fills",
         noneFill + alpha(fillsGeneral) +
         '<div class="legend" id="legend"></div>',
-        "Choose one — these paint every country.") +
+        "Choose one — these paint every country.", false) +
 
       sec("stats", "Statistics",
         row("rad", "stat-none", "None", state.stat === "none", "statgrp") +
@@ -1310,12 +1310,12 @@
               state.statMode === "fill", null, "#E8A33D") +
           '<div class="legend" id="stat-legend"></div>' +
         '</div>',
-        "Hollow amber rings over the active fill by default; toggle to repaint as a choropleth.") +
+        "Hollow amber rings over the active fill by default; toggle to repaint as a choropleth.", false) +
 
       sec("blocs", "Alliances &amp; blocs",
         sub("Defense") + defBlocs +
         sub("Economic &amp; political") + ecoBlocs,
-        "Stackable bloc outlines. Membership follows the YEAR slider.") +
+        "Stackable bloc outlines. Membership follows the YEAR slider.", false) +
 
       sec("security", "Conflict &amp; security",
         sub("Choropleth") +
@@ -1325,7 +1325,7 @@
         sub("Stack toggles") +
         row("chk", "heat", "Violence density (heat)", state.heat, null, "#ff6a3d") +
         row("chk", "nuclear", "Nuclear weapons states", state.nuclear, null, "#3FE08A") +
-        '<p class="hint">Nuclear borders: solid = intercontinental, dashed = regional. Green = thermonuclear, lime = fission-only. Labels show est. warheads.</p>') +
+        '<p class="hint">Nuclear borders: solid = intercontinental, dashed = regional. Green = thermonuclear, lime = fission-only. Labels show est. warheads.</p>', null, false) +
 
       sec("econ", "Economy &amp; connectivity",
         sub("Choropleth") +
@@ -1336,7 +1336,7 @@
         row("chk", "chokepoints", "Chokepoints &amp; straits", state.chokepoints, null, "#E8A33D") +
         row("chk", "portwatch", "Chokepoint traffic (PortWatch, live)", state.portwatch, null, "#6FE3D4") +
         row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6"),
-        "BRI: solid = operational, dashed = planned. PortWatch rings: 7-day avg daily transits.") +
+        "BRI: solid = operational, dashed = planned. PortWatch rings: 7-day avg daily transits.", false) +
 
       sec("signals", "Live signals",
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
@@ -1349,7 +1349,7 @@
         theoryRow("deltas", "River deltas (Marshall)", "#49C5B6") +
         theoryRow("shatter", "Shatterbelts (Cohen)", "#C44569") +
         theoryRow("rimland", "Spykman Rimland + offshore", "#C8B08A") +
-        theoryRow("pearls", "String of Pearls", "#E8E6DF")) +
+        theoryRow("pearls", "String of Pearls", "#E8E6DF"), null, false) +
 
       sec("resources", "Natural resources",
         resourceRows +
@@ -1360,7 +1360,7 @@
         row("chk", "advmode", "Adversary highlight", state.advmode, null, "#FF4D4D") +
         row("chk", "allymode", "Ally highlight", state.allymode, null, "#FFD633") +
         row("chk", "basesmode", "Military bases", state.basesmode, null, "#FFD633"),
-        "Click a country: military allies blue, economic green, adversaries red.") +
+        "Click a country: military allies blue, economic green, adversaries red.", false) +
 
       '<p class="hint" style="margin-top:12px">Data: Natural Earth, RainViewer, Open-Meteo, World Bank (CC BY-4.0), UCDP, IMF PortWatch, OSM/CARTO, AWS Terrain. Conflict synopses: sources per entry.</p>';
 
@@ -1725,7 +1725,7 @@
     role:    function (p, st) { return ["Strategic role", ROLE_LABEL[p.role] || "—"]; },
     power:   function (p, st) { return ["Computed power (share)",
                                         st.composite != null ? (st.composite * 100).toFixed(2) + "%" : "—"]; },
-    renew:   function (p, st) { return ["Renewables (% of grid)", fmtPct(st.renew)]; },
+    renew:   function (p, st) { return ["Renewables (% of total energy)", fmtPct(st.renew)]; },
     milex:   function (p, st) { return ["Military spending", st.milex ? fmtUSD(st.milex) : "—"]; },
     gini:    function (p, st) { return ["Inequality (Gini)", st.gini != null && st.gini >= 0 ? Math.round(st.gini) : "—"]; },
     trade:   function (p, st) { return ["Trade balance (% GDP)",
