@@ -1076,35 +1076,60 @@
       })
       .catch(function (e) { console.warn("energy/oil:", e.message); });
 
-    // Chokepoint stress: tells the OIL story, so the halo size keys on the
-    // tanker metric first (tanker_pct = ship count), falling back to
-    // tanker_capacity_pct (volume proxy), then all_pct as a last resort.
-    // The label carries the data date so the reader knows what point in
-    // time "below baseline" refers to (PortWatch publishes with lag).
-    fetch("data/energy/chokepoint_series.json", { cache: "no-store" })
-      .then(function (r) { if (!r.ok) throw new Error("series " + r.status); return r.json(); })
-      .then(function (d) {
-        window.CHOKEPOINT_SERIES = d;
-        var feats = [];
-        Object.keys(CHOKEPOINT_COORDS).forEach(function (slug) {
-          var block = d && d[slug];
+    // Chokepoint stress: editorial overrides take precedence over PortWatch.
+    // PortWatch's Feb-2026 boundary revision counts stranded/anchored
+    // tankers, so its tanker series under-reports the Hormuz collapse.
+    // Where data/energy/chokepoint_editorial.json has an entry, we use
+    // (baseline_bbl_day, pct_of_normal) directly. Where it doesn't, we
+    // fall back to PortWatch tanker_pct (then tanker_capacity_pct, then
+    // all_pct). PortWatch still drives the chart at chart.html.
+    function fetchJSON(path) {
+      return fetch(path, { cache: "no-store" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .catch(function () { return null; });
+    }
+    Promise.all([
+      fetchJSON("data/energy/chokepoint_series.json"),
+      fetchJSON("data/energy/chokepoint_editorial.json")
+    ]).then(function (results) {
+      var series = results[0] || {};
+      var editorial = results[1] || {};
+      window.CHOKEPOINT_SERIES = series;
+      window.CHOKEPOINT_EDITORIAL = editorial;
+
+      function fmtMbd(barrels) {
+        var mbd = barrels / 1e6;
+        return (mbd >= 10 ? mbd.toFixed(1) : mbd.toFixed(2)) + " mb/d";
+      }
+
+      var feats = [];
+      Object.keys(CHOKEPOINT_COORDS).forEach(function (slug) {
+        var ed = editorial && editorial[slug];
+        var stress, label;
+        if (ed && ed.pct_of_normal != null) {
+          var pct = ed.pct_of_normal;
+          stress = Math.max(0, 100 - pct);
+          var flow = (ed.baseline_bbl_day || 0) * pct / 100;
+          label = fmtMbd(flow) + " (" + pct + "% of normal)";
+        } else {
+          var block = series && series[slug];
           if (!block || !block.deltas || !block.deltas.latest) return;
           var latest = block.deltas.latest;
-          var pct = (latest.tanker_pct != null) ? latest.tanker_pct
-                  : (latest.tanker_capacity_pct != null) ? latest.tanker_capacity_pct
-                  : latest.all_pct;
-          if (pct == null) return;
-          var stress = Math.max(0, 100 - pct);
-          var label = stress + "% below baseline (tankers, " + latest.date + ")";
-          feats.push({ type: "Feature",
-            properties: { name: CHOKEPOINT_DISPLAY[slug],
-              stress: stress, stress_label: label },
-            geometry: { type: "Point", coordinates: CHOKEPOINT_COORDS[slug] } });
-        });
-        var s = map.getSource("chokepoint-stress");
-        if (s) s.setData({ type: "FeatureCollection", features: feats });
-      })
-      .catch(function (e) { console.warn("energy/series:", e.message); });
+          var p = (latest.tanker_pct != null) ? latest.tanker_pct
+                : (latest.tanker_capacity_pct != null) ? latest.tanker_capacity_pct
+                : latest.all_pct;
+          if (p == null) return;
+          stress = Math.max(0, 100 - p);
+          label = stress + "% below baseline (tankers, " + latest.date + ")";
+        }
+        feats.push({ type: "Feature",
+          properties: { name: CHOKEPOINT_DISPLAY[slug],
+            stress: stress, stress_label: label },
+          geometry: { type: "Point", coordinates: CHOKEPOINT_COORDS[slug] } });
+      });
+      var s = map.getSource("chokepoint-stress");
+      if (s) s.setData({ type: "FeatureCollection", features: feats });
+    }).catch(function (e) { console.warn("energy/chokepoint:", e.message); });
   }
 
   function applyFill() {

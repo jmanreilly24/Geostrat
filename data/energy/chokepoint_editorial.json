@@ -1,0 +1,6 @@
+{
+  "_note": "Editorial overrides for war-period chokepoint flow. Sources in 'source'. PortWatch's tanker-count series under-reports the collapse at Hormuz (its boundary revision counts stranded/anchored tankers), so authoritative AIS-audit numbers go here. Where a chokepoint has an entry, the map's stress halo + label uses these values INSTEAD of PortWatch. Edit freely.",
+  "hormuz":      { "baseline_bbl_day": 20000000, "pct_of_normal": 5,  "source": "EIA pre-war; CSIS/GEF AIS audit Jun 2026" },
+  "babelmandeb": { "baseline_bbl_day": 6000000,  "pct_of_normal": 35, "source": "EIA; Red Sea ~49% capacity, May 2026" },
+  "malacca":     { "baseline_bbl_day": 16000000, "pct_of_normal": 92, "source": "PortWatch Jun 2026" }
+}
