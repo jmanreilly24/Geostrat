@@ -1,0 +1,162 @@
+{
+  "type": "FeatureCollection",
+  "_note": "PLACEHOLDER editorial digitization. Each feature has placeholder:true and must be replaced with Global Energy Monitor GOGIT data (CC BY 4.0) once the user drops the export at data/energy/_raw/. Coordinates are approximate route polylines, not GIS-accurate.",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "ESPO oil pipeline (Russia -> China, Skovorodino spur)",
+        "substance": "oil",
+        "status": "operating",
+        "operator_country": "RUS",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [104.30, 52.30], [108.50, 53.00], [114.00, 53.80], [120.00, 53.20],
+          [123.50, 51.80], [125.70, 49.50], [126.60, 45.00]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Power of Siberia gas pipeline (Russia -> China)",
+        "substance": "gas",
+        "status": "operating",
+        "operator_country": "RUS",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [114.30, 62.30], [117.80, 61.20], [121.50, 59.40], [125.20, 57.10],
+          [127.10, 54.30], [127.40, 50.30], [126.60, 47.00], [124.50, 44.00],
+          [121.00, 41.80], [116.40, 39.90]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Central Asia–China gas pipeline (Turkmenistan -> China)",
+        "substance": "gas",
+        "status": "operating",
+        "operator_country": "TKM",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [62.30, 37.30], [65.50, 38.60], [69.50, 40.20], [73.20, 40.50],
+          [76.80, 42.00], [80.20, 43.10], [85.50, 44.20], [89.40, 43.60],
+          [94.50, 41.20], [99.80, 39.40], [105.20, 38.60], [110.60, 38.20],
+          [115.20, 38.80], [116.40, 39.90]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Kazakhstan–China crude pipeline (Atyrau -> Alashankou)",
+        "substance": "oil",
+        "status": "operating",
+        "operator_country": "KAZ",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [51.92, 47.10], [55.30, 48.20], [60.50, 49.30], [64.80, 49.80],
+          [69.20, 49.50], [73.50, 48.60], [78.00, 47.60], [82.55, 45.15]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "China–Myanmar oil pipeline (Kyaukpyu -> Kunming)",
+        "substance": "oil",
+        "status": "operating",
+        "operator_country": "MMR",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [93.55, 19.43], [95.20, 20.80], [96.40, 22.20], [97.80, 23.60],
+          [99.10, 24.40], [101.20, 24.90], [102.71, 25.05]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "China–Myanmar gas pipeline (Kyaukpyu -> Kunming, parallel)",
+        "substance": "gas",
+        "status": "operating",
+        "operator_country": "MMR",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [93.55, 19.50], [95.30, 20.90], [96.50, 22.30], [97.90, 23.70],
+          [99.20, 24.50], [101.30, 24.95], [102.71, 25.10]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Goreh–Jask crude pipeline (Iran, Gulf of Oman terminal, bypasses Hormuz)",
+        "substance": "oil",
+        "status": "operating",
+        "operator_country": "IRN",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [50.50, 30.55], [52.00, 29.80], [54.10, 28.90], [56.20, 27.70],
+          [57.60, 26.50], [57.78, 25.65]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Iran–Pakistan 'Peace' gas pipeline (Pakistani side largely unbuilt)",
+        "substance": "gas",
+        "status": "construction",
+        "operator_country": "IRN",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [52.20, 26.50], [56.80, 26.20], [60.50, 26.00], [63.20, 25.60],
+          [66.40, 25.30], [68.50, 25.10], [73.10, 24.85]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "CPEC oil pipeline to Gwadar (proposed, mostly planned)",
+        "substance": "oil",
+        "status": "proposed",
+        "operator_country": "PAK",
+        "placeholder": true
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [62.34, 25.13], [65.00, 26.20], [67.50, 27.50], [70.20, 29.30],
+          [72.80, 31.00], [74.50, 32.50], [76.20, 34.00], [78.50, 35.50]
+        ]
+      }
+    }
+  ]
+}

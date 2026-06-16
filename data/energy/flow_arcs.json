@@ -1,0 +1,50 @@
+{
+  "_note": "Editorial energy-flow arcs. 'maritime' arcs use the 'via' waypoint list to stay over water; 'overland' arcs draw a great-circle from->to. Edit freely.",
+  "arcs": [
+    {
+      "id": "ir-cn-sea",
+      "label": "Iran -> China (seaborne, via Hormuz + Malacca)",
+      "mode": "maritime",
+      "from": [56.30, 26.90],
+      "to":   [121.50, 31.20],
+      "via":  [[58, 25], [68, 20], [80, 6], [100, 3], [110, 15], [118, 22]]
+    },
+    {
+      "id": "gulf-asia",
+      "label": "Gulf -> East Asia (via Hormuz + Malacca)",
+      "mode": "maritime",
+      "from": [50.80, 26.50],
+      "to":   [120.40, 29.00],
+      "via":  [[55, 25], [60, 22], [68, 16], [78, 6], [96, 3], [105, 6], [115, 18]]
+    },
+    {
+      "id": "gulf-eu",
+      "label": "Gulf -> Europe (via Bab el-Mandeb + Suez)",
+      "mode": "maritime",
+      "from": [50.80, 26.50],
+      "to":   [-9.50, 36.30],
+      "via":  [[48, 22], [44, 18], [43, 13.5], [38, 20], [33, 28], [29, 31.5], [22, 34], [12, 37], [0, 36]]
+    },
+    {
+      "id": "ru-cn-espo",
+      "label": "Russia -> China (ESPO crude, overland)",
+      "mode": "overland",
+      "from": [104.30, 52.30],
+      "to":   [126.60, 45.00]
+    },
+    {
+      "id": "ru-cn-pos",
+      "label": "Russia -> China (Power of Siberia gas, overland)",
+      "mode": "overland",
+      "from": [114.30, 62.30],
+      "to":   [116.40, 39.90]
+    },
+    {
+      "id": "ca-cn-gas",
+      "label": "Central Asia -> China (gas, overland)",
+      "mode": "overland",
+      "from": [62.30, 37.30],
+      "to":   [116.40, 39.90]
+    }
+  ]
+}
