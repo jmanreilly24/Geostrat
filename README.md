@@ -68,31 +68,90 @@ This is the **v1 foundation**: the engine is built and every *render type* is
 proven with real (if partial) data. Filling in the rest is mostly editing data.
 
 ### Built and working
-- [x] 3D globe (+ flat view by zooming/rotating) with terrain hillshade & elevation
-- [x] Country borders, click-to-inspect, telemetry, auto-spin
-- [x] **Fill layer** — Power tier (hegemon → small)
-- [x] **Fill layer** — Brzezinski agents / pivots
-- [x] **Outline layers** — NATO, BRICS, EU (stackable)
-- [x] **Heat layer** — violence density (sample data; mechanism complete)
-- [x] **Zone layer** — Mackinder Heartland (approximate)
-- [x] **Point/label layer** — chokepoints & straits
-- [x] **Auto-updating UCDP conflict feed** (weekly GitHub Action → committed GeoJSON)
-- [x] **Computed power fill** from World Bank indicators (weekly Action, CINC-style composite)
-- [x] **GDELT news-pulse** live signal layer (parked: GDELT blocks server fetches; to be revived as an in-browser live layer)
-- [x] **15 blocs** as stackable outlines, grouped Defense vs Economic/political
-- [x] **Ally highlight on click** (derived from defense/economic blocs + bilateral pacts; edit ALLIANCE_CONFIG and BILATERAL_PACTS in data/countries.js)
-- [x] **Shipping**: static major-routes layer (data/shipping-lanes.js, editable) + live PortWatch chokepoint traffic (weekly Action -> data/portwatch.json)
-- [x] **Spykman Rimland** tan country fill (edit window.RIMLAND in data/countries.js)
-- [x] **Nuclear weapons states** green hatch overlay (edit window.NUCLEAR)
-- [x] **World Bank coverage expanded to ~165 countries**
+
+**Base globe & navigation**
+- [x] MapLibre 3D globe + flat projection; toggle FLAT / SPIN; live telemetry strip
+- [x] Terrain hillshade & true 3D topography (raster-dem + setTerrain)
+- [x] BlueMarble satellite base layer (NASA EOSDIS GIBS)
+- [x] Country borders, click-to-inspect, name-alias canonicalisation
+- [x] Antimeridian polygon splitter (Russia / Fiji / Kiribati no longer smear)
+- [x] Progressive enhancement: 50m world-atlas at boot, 10m swap on idle
+
+**Country fills (choose one)**
+- [x] Power tier (hegemon → small)
+- [x] Brzezinski agents / pivots
+- [x] Computed power from World Bank indicators (CINC-style composite)
+- [x] Liberal democracy (V-Dem)
+- [x] Freedom of expression (V-Dem)
+- [x] Renewables share of total energy (World Bank EG.FEC.RNEW.ZS)
+- [x] Military spending
+- [x] Trade balance (% GDP)
+- [x] Gini inequality
+- [x] Majority religion
+- [x] Active conflicts
+- [x] US military footprint (~82 host countries / territories)
+- [x] Top trade partner (US/China, year-aware via TRADE_PARTNER_CHANGES)
+
+**Statistics overlay (proportional symbols or choropleth)**
+- [x] Population, GDP, GDP/capita, military personnel, military spending, renewables, freedom of expression
+- [x] Hollow amber rings over the active fill **or** repaint-as-choropleth toggle with per-metric color ramps
+
+**Stackable outline / overlay layers**
+- [x] 15 alliance/economic blocs, alphabetised, grouped Defense vs Economic/political
+- [x] Nuclear weapons states (green diagonal hatch, intercontinental/regional borders, warhead labels)
+- [x] Chokepoints & straits
+- [x] Belt & Road corridors (solid = operational, dashed = planned, plus POIs)
+- [x] Shipping lanes (major routes)
+- [x] PortWatch chokepoint traffic (7-day avg daily transits)
+
+**Classical theory zones (with info-icon tooltips: theorist, year, school, desc)**
+- [x] Mackinder Heartland
+- [x] Spykman Rimland + offshore (tan)
+- [x] Island Chains (1st–3rd)
+- [x] Cohen Shatterbelts
+- [x] String of Pearls
+- [x] River-delta flashpoints (Marshall)
+
+**Resources (hatched basin polygons + named field dots)**
+- [x] Oil — Middle East supergiants (Ghawar, Burgan, Rumaila, Kirkuk, Marun, Ahvaz, Gachsaran, Agha Jari, Azadegan, Yadavaran, etc.) + Permian, Bakken, North Sea, West Siberia, Orinoco, pre-salt Santos, Stabroek, Niger Delta, Bohai, Daqing, Tarim, Cantarell, Athabasca oil sands
+- [x] Gas — South Pars/North Dome, Yamal, Galkynysh, Karachaganak, Marcellus, Haynesville, NW Shelf, Browse, Hassi R'Mel, Groningen, Krishna-Godavari, Rovuma LNG
+- [x] Lithium — Atacama/Uyuni/Hombre Muerto/Olaroz triangle, Greenbushes, Pilgangoora, Qinghai/Tibet brines, Bikita, Manono, Thacker Pass
+- [x] Copper — Chilean belt, Cerro Verde, Antamina, Oyu Tolgoi, Grasberg, Katanga & Zambian copperbelts, Kamoa-Kakula, Reko Diq
+- [x] Iron ore — Pilbara/Hamersley, Carajás, Iron Quadrangle, Simandou, Kursk, Krivbas, Anshan
+- [x] Rare earths — Bayan Obo, Sichuan, Mountain Pass, Mount Weld, Kvanefjeld, Lovozero
+- [x] Uranium — Kazakh ISR, Athabasca, McArthur River, Arlit, Husab/Rössing, Olympic Dam
+- [x] Cobalt — Katanga, Murrin Murrin, Sorowako, Norilsk
+
+**Conflict & live signals**
+- [x] Editorial conflict synopses + violence density heatmap (year-aware via sinceY/untilY)
+- [x] Iran/Israel-Iran direct exchanges 2024–2025 + 12-Day War, Lebanon-Hezbollah 2024, Red Sea/Houthi maritime war
+- [x] UCDP conflict feed (weekly GitHub Action → committed GeoJSON)
+- [x] GDELT news-pulse — GKG 2.0 data-lake migration, granular geocoded mentions snapped to ~0.5° grid (6-hourly Action)
+- [x] Precipitation radar (RainViewer, 10-min frames)
+
+**Time slider**
+- [x] YEAR 2000 → LIVE, year-aware lookups for fills, stats, traders, V-Dem, nuclear warheads, conflicts
+- [x] Country stat-sheet refreshes on year change and shows the active map mode's indicator
+- [x] World Bank forward-fill cache for publish lag (renewables, gini, milex)
+
+**Interaction modes (on click)**
+- [x] Ally highlight (defense + economic blocs + bilateral pacts)
+- [x] Adversary highlight
+- [x] Military bases (Lostfields/Vine 2021 host list)
+
+**Data / ops**
+- [x] World Bank coverage ~165 countries
+- [x] Auto-updaters: conflict (UCDP, weekly), power index (World Bank, weekly), news pulse (GDELT GKG, 6-hourly), V-Dem libdem + freexp (monthly), PortWatch (weekly), history snapshots 2000–present
+- [x] Workflow push-race tolerance: rebase-retry loop in every Action so concurrent runs don't deadlock
+- [x] Boot defaults: nothing painted on top of the globe, every rail section collapsed — user picks the lens
 
 ### Next up (priority order)
-- [ ] **Editorial interstate-tension layer** (your main goal) — heat + arcs you control
+- [ ] **Editorial interstate-tension layer** — heat + arcs you control (independent of UCDP)
 - [ ] **Flat equal-area export** (Equal Earth / Robinson) for article screenshots
-- [ ] More fills: nuclear status, regime type, economic tier
-- [ ] More zones: Spykman Rimland, shatterbelts, Cohen's realms
-- [ ] Flow layers: trade, energy pipelines, Belt & Road, undersea cables, shipping lanes
-- [ ] Context: population density, EEZs / maritime zones, disputed-territory overlay, regions
+- [ ] More fills: regime type, economic tier
+- [ ] More zones: Cohen's realms (full taxonomy, not just shatterbelts)
+- [ ] Flow layers: undersea cables, energy pipelines, trade gravity
+- [ ] Context: population density, EEZs / maritime zones, disputed-territory overlay
 - [ ] Search box, share-a-view URLs, mobile polish
 
 ---

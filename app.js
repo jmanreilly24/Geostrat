@@ -837,12 +837,47 @@
       paint: { "line-color": "#C44569", "line-width": 1.3, "line-dasharray": [2, 2], "line-opacity": 0.75 },
       layout: { visibility: "none" } });
 
-    // natural resource deposits
+    // natural resource deposits — points (named fields) + hatched basin polygons.
+    // Basins paint underneath the dots; both share the resource toggle.
     map.addSource("resources", { type: "geojson", data: fc((window.RESOURCES || []).map(function (r) {
       return { type: "Feature", properties: { rtype: r.type, name: r.name },
                geometry: { type: "Point", coordinates: [r.lng, r.lat] } };
     })) });
+    map.addSource("resource-basins", { type: "geojson",
+      data: window.RESOURCE_BASINS || fc([]) });
+
+    // Generate a 16x16 diagonal-hatch sprite per resource type, in that
+    // resource's signature color. Same compositing trick as nuclear-hatch
+    // above, but parameterised so each type carries its own pattern image.
+    function makeResHatch(id, color) {
+      if (map.hasImage(id)) return;
+      var cv = document.createElement("canvas"); cv.width = 16; cv.height = 16;
+      var ctx = cv.getContext("2d");
+      ctx.strokeStyle = color; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      // three parallel 45° strokes so the pattern tiles cleanly
+      ctx.moveTo(-4, 20); ctx.lineTo(20, -4);
+      ctx.moveTo(-12, 12); ctx.lineTo(12, -12);
+      ctx.moveTo(4, 28); ctx.lineTo(28, 4);
+      ctx.stroke();
+      map.addImage(id, ctx.getImageData(0, 0, 16, 16));
+    }
+
     (window.RESOURCE_TYPES || []).forEach(function (t) {
+      makeResHatch("res-hatch-" + t[0], t[2]);
+
+      // hatched basin polygon (under the dots)
+      map.addLayer({ id: "resb-" + t[0], type: "fill", source: "resource-basins",
+        filter: ["==", ["get", "rtype"], t[0]],
+        paint: { "fill-pattern": "res-hatch-" + t[0], "fill-opacity": 0.55 },
+        layout: { visibility: "none" } });
+      // crisp basin outline so edges read at low zoom
+      map.addLayer({ id: "resb-" + t[0] + "-line", type: "line", source: "resource-basins",
+        filter: ["==", ["get", "rtype"], t[0]],
+        paint: { "line-color": t[2], "line-width": 1.0, "line-opacity": 0.85 },
+        layout: { visibility: "none" } });
+
+      // named point + label (on top of the basin fill)
       map.addLayer({ id: "res-" + t[0], type: "circle", source: "resources",
         filter: ["==", ["get", "rtype"], t[0]],
         paint: { "circle-radius": 4.5, "circle-color": t[2],
@@ -1384,7 +1419,11 @@
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
       BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
       (window.RESOURCE_TYPES || []).forEach(function (t) {
-        state["res" + t[0]] = false; setVis("res-" + t[0], false); setVis("res-" + t[0] + "-label", false);
+        state["res" + t[0]] = false;
+        ["res-" + t[0], "res-" + t[0] + "-label",
+         "resb-" + t[0], "resb-" + t[0] + "-line"].forEach(function (id) {
+          setVis(id, false);
+        });
       });
       clearAllies(); clearAdversaries(); clearBases(); setRadar(false); setClouds(false); try { map.setTerrain(null); } catch (e) {}
       buildRail(); updateLegend(); tele();
@@ -1467,7 +1506,10 @@
     (window.RESOURCE_TYPES || []).forEach(function (t) {
       byId("cb-res" + t[0]).onchange = function (e) {
         state["res" + t[0]] = e.target.checked;
-        setVis("res-" + t[0], e.target.checked); setVis("res-" + t[0] + "-label", e.target.checked);
+        ["res-" + t[0], "res-" + t[0] + "-label",
+         "resb-" + t[0], "resb-" + t[0] + "-line"].forEach(function (id) {
+          setVis(id, e.target.checked);
+        });
         tele();
       };
     });
