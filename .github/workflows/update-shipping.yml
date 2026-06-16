@@ -13,17 +13,29 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Fetch PortWatch chokepoint traffic
+      - name: Fetch PortWatch chokepoint traffic + series
         run: python scripts/update_shipping.py
       - name: Commit if changed
         run: |
-          if [ ! -f data/portwatch.json ]; then
-            echo "No data/portwatch.json produced - fetch likely failed. Skipping commit."
-            exit 0
-          fi
           git config user.name "geostrat-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/portwatch.json
+          changed=0
+          if [ -s data/portwatch.json ]; then
+            git add data/portwatch.json
+            changed=1
+          else
+            echo "data/portwatch.json missing/empty -- skipping."
+          fi
+          if [ -s data/energy/chokepoint_series.json ]; then
+            git add data/energy/chokepoint_series.json
+            changed=1
+          else
+            echo "data/energy/chokepoint_series.json missing/empty -- skipping."
+          fi
+          if [ "$changed" = "0" ]; then
+            echo "No output files produced. Exiting cleanly."
+            exit 0
+          fi
           if git diff --staged --quiet; then echo "No changes."; exit 0; fi
           git commit -m "Update shipping traffic $(date -u +%F)"
           for i in 1 2 3 4 5; do
