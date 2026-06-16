@@ -1,7 +1,7 @@
 # Copyright
 
 Geostrat — interactive geostrategic atlas
-Copyright © 2026 [YOUR FULL LEGAL NAME]. All rights reserved.
+Copyright © 2026 [Jared Merson Reilly]. All rights reserved.
 
 The source code, visual design, editorial classifications, curated layer data,
 and written content of this project are the intellectual property of the
