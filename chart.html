@@ -75,10 +75,6 @@
     .then(function (data) {
       var gen = document.getElementById("generated");
       if (gen && data.generated) gen.textContent = "GENERATED " + data.generated;
-      if (data._placeholder) {
-        gen.textContent += " · PLACEHOLDER (awaiting first PortWatch CI run)";
-        gen.style.color = "#C44569";
-      }
       window.renderThroughputChart(document.getElementById("chart"), data, {
         metric: metric, primary: primary
       });

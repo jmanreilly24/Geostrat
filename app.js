@@ -957,7 +957,8 @@
         "text-halo-color": "#0B1020", "text-halo-width": 1.2 } });
 
     // 2d. Chokepoint stress: amber halo whose radius scales with collapse
-    // (100 - latest.all_pct). Bigger halo = more pressure.
+    // (100 - latest tanker_pct, falling back to tanker_capacity_pct, then
+    // all_pct). Bigger halo = more pressure on oil throughput.
     map.addLayer({ id: "chokepoint-stress-halo", type: "circle", source: "chokepoint-stress",
       paint: {
         "circle-radius": ["interpolate", ["linear"], ["get", "stress"],
@@ -1075,8 +1076,12 @@
       })
       .catch(function (e) { console.warn("energy/oil:", e.message); });
 
-    // Chokepoint stress: derive halo radius from latest.all_pct
-    fetch("data/energy/chokepoint_series.json", { cache: "default" })
+    // Chokepoint stress: tells the OIL story, so the halo size keys on the
+    // tanker metric first (tanker_pct = ship count), falling back to
+    // tanker_capacity_pct (volume proxy), then all_pct as a last resort.
+    // The label carries the data date so the reader knows what point in
+    // time "below baseline" refers to (PortWatch publishes with lag).
+    fetch("data/energy/chokepoint_series.json", { cache: "no-store" })
       .then(function (r) { if (!r.ok) throw new Error("series " + r.status); return r.json(); })
       .then(function (d) {
         window.CHOKEPOINT_SERIES = d;
@@ -1084,12 +1089,16 @@
         Object.keys(CHOKEPOINT_COORDS).forEach(function (slug) {
           var block = d && d[slug];
           if (!block || !block.deltas || !block.deltas.latest) return;
-          var pct = block.deltas.latest.all_pct;
-          var stress = Math.max(0, 100 - (pct == null ? 100 : pct));
+          var latest = block.deltas.latest;
+          var pct = (latest.tanker_pct != null) ? latest.tanker_pct
+                  : (latest.tanker_capacity_pct != null) ? latest.tanker_capacity_pct
+                  : latest.all_pct;
+          if (pct == null) return;
+          var stress = Math.max(0, 100 - pct);
+          var label = stress + "% below baseline (tankers, " + latest.date + ")";
           feats.push({ type: "Feature",
             properties: { name: CHOKEPOINT_DISPLAY[slug],
-              stress: stress,
-              stress_label: stress + "% below baseline" },
+              stress: stress, stress_label: label },
             geometry: { type: "Point", coordinates: CHOKEPOINT_COORDS[slug] } });
         });
         var s = map.getSource("chokepoint-stress");
