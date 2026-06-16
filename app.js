@@ -190,7 +190,8 @@
     hillshade: false, fill: "none", stat: "none", statMode: "ring",
     heat: false, heartland: false, rimland: false, nuclear: false,
     chokepoints: false, newspulse: false, lanes: false, portwatch: false, bri: false,
-    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false
+    allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false,
+    pipelines: false, flowarcs: false, chokestress: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
   (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
@@ -367,6 +368,7 @@
       f.properties.vdem = vdemAt("libdem", CUR_YEAR, f.properties.cname);
       f.properties.freexp = vdemAt("freexp", CUR_YEAR, f.properties.cname);
       f.properties.usbase = (window.USBASE_HOSTS || []).indexOf(f.properties.cname) >= 0;
+      f.properties.oil = (window.OIL_PRODUCTION || {})[st.iso3 || ""] || 0;
       f.properties.offshore = !!(key && listSet(window.RIMLAND_OFFSHORE)[key]);
       var cfs = conflictsAt(f.properties.cname, CUR_YEAR);
       f.properties.conflict = cfs.length ? cfs[0].type : "";
@@ -890,11 +892,210 @@
         paint: { "text-color": t[2], "text-halo-color": "#0B1020", "text-halo-width": 1.2 } });
     });
 
+    // ---- Energy modes ----------------------------------------------------
+    // Pipelines, oil-production choropleth, flow arcs, chokepoint stress.
+    // Each source is fetched at boot from data/energy/*; if a file is missing
+    // we paint an empty FC so the toggle still flips cleanly.
+    map.addSource("pipelines",      { type: "geojson", data: fc([]) });
+    map.addSource("flow-arcs",      { type: "geojson", data: fc([]) });
+    map.addSource("chokepoint-stress", { type: "geojson", data: fc([]) });
+
+    // 2a. Pipelines: gas teal, oil amber; operating solid, non-operating dashed.
+    map.addLayer({ id: "pipelines-line", type: "line", source: "pipelines",
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
+      paint: {
+        "line-color": ["match", ["get", "substance"], "gas", "#7FD1C4", "#E8A33D"],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.2, 6, 3.5],
+        "line-opacity": 0.9,
+        "line-dasharray": ["case",
+          ["==", ["get", "status"], "operating"], ["literal", [1, 0]],
+          ["literal", [2, 2]]]
+      } });
+    map.addLayer({ id: "pipelines-label", type: "symbol", source: "pipelines",
+      minzoom: 3.2,
+      layout: { "text-field": ["get", "name"], "text-font": ["Open Sans Regular"],
+        "text-size": 10, "symbol-placement": "line", "text-anchor": "center",
+        visibility: "none" },
+      paint: { "text-color": "#E8C98A", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
+
+    // 2b. Oil-production choropleth.
+    // f.properties.oil is set per-feature in decorate() via ISO3 join.
+    map.addLayer({ id: "fill-oil", type: "fill", source: "countries",
+      paint: {
+        "fill-color": ["interpolate", ["linear"], ["coalesce", ["get", "oil"], 0],
+          0,         "#0B1020",
+          250000,    "#3A2A14",
+          1000000,   "#6B4518",
+          4000000,   "#A86A1E",
+          9000000,   "#E8A33D",
+          13000000,  "#FFD27F"],
+        "fill-opacity": 0.85 },
+      layout: { visibility: "none" } });
+
+    // 2c. Flow arcs: maritime amber solid, overland teal dashed.
+    map.addLayer({ id: "flow-arcs-line", type: "line", source: "flow-arcs",
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
+      paint: {
+        "line-color": ["match", ["get", "mode"], "overland", "#7FD1C4", "#E8A33D"],
+        "line-dasharray": ["match", ["get", "mode"],
+          "overland", ["literal", [2, 2]], ["literal", [1, 0]]],
+        "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.5, 6, 4],
+        "line-opacity": 0.85
+      } });
+    map.addLayer({ id: "flow-arcs-label", type: "symbol", source: "flow-arcs",
+      layout: { "text-field": ["get", "label"], "text-font": ["Open Sans Regular"],
+        "text-size": 10.5, "symbol-placement": "line",
+        "symbol-spacing": 500, "text-anchor": "center",
+        "text-keep-upright": true, visibility: "none" },
+      paint: { "text-color": "#E8E6DF", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
+    // Direction glyph: small chevron repeated along the arc.
+    map.addLayer({ id: "flow-arcs-arrow", type: "symbol", source: "flow-arcs",
+      layout: { "text-field": "▶", "text-font": ["Open Sans Regular"],
+        "text-size": 11, "symbol-placement": "line",
+        "symbol-spacing": 90, "text-keep-upright": false, visibility: "none" },
+      paint: { "text-color": ["match", ["get", "mode"], "overland", "#7FD1C4", "#E8A33D"],
+        "text-halo-color": "#0B1020", "text-halo-width": 1.2 } });
+
+    // 2d. Chokepoint stress: amber halo whose radius scales with collapse
+    // (100 - latest.all_pct). Bigger halo = more pressure.
+    map.addLayer({ id: "chokepoint-stress-halo", type: "circle", source: "chokepoint-stress",
+      paint: {
+        "circle-radius": ["interpolate", ["linear"], ["get", "stress"],
+          0, 8, 20, 18, 50, 30, 80, 46],
+        "circle-color": "#E8A33D",
+        "circle-opacity": 0.18,
+        "circle-stroke-color": "#E8A33D",
+        "circle-stroke-width": 1.6,
+        "circle-stroke-opacity": 0.85,
+        "circle-blur": 0.4 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "chokepoint-stress-label", type: "symbol", source: "chokepoint-stress",
+      layout: { "text-field": ["concat", ["get", "name"], "  ", ["get", "stress_label"]],
+        "text-font": ["Open Sans Regular"], "text-size": 11.5,
+        "text-offset": [0, 1.8], "text-anchor": "top", visibility: "none" },
+      paint: { "text-color": "#FFD27F", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
+
+    // Kick off the async loaders. Each failure leaves an empty FC, never throws.
+    loadEnergyData();
+
     // transparent always-on hit layer for clicks
     map.addLayer({ id: "countries-hit", type: "fill", source: "countries",
       paint: { "fill-color": "#000", "fill-opacity": 0 } });
 
     applyFill();
+  }
+
+  /* ---- Energy data loaders ---------------------------------------------- */
+  // arc densifier: if `via` waypoints are present, linear-interp through them
+  // (keeps maritime arcs over water). Otherwise spherical great-circle.
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function densifyVia(pts, n) {
+    if (pts.length < 2) return pts.slice();
+    var out = [pts[0].slice()];
+    for (var i = 1; i < pts.length; i++) {
+      var a = pts[i - 1], b = pts[i];
+      for (var k = 1; k <= n; k++) {
+        out.push([lerp(a[0], b[0], k / n), lerp(a[1], b[1], k / n)]);
+      }
+    }
+    return out;
+  }
+  function greatCircle(from, to, n) {
+    // Slerp on the unit sphere. Returns n+1 [lng,lat] points.
+    var DEG = Math.PI / 180, RAD = 180 / Math.PI;
+    function v(p) {
+      var lon = p[0] * DEG, lat = p[1] * DEG;
+      return [Math.cos(lat) * Math.cos(lon), Math.cos(lat) * Math.sin(lon), Math.sin(lat)];
+    }
+    var a = v(from), b = v(to);
+    var dot = Math.max(-1, Math.min(1, a[0]*b[0] + a[1]*b[1] + a[2]*b[2]));
+    var omega = Math.acos(dot);
+    if (omega < 1e-6) return [from.slice(), to.slice()];
+    var so = Math.sin(omega);
+    var out = [];
+    for (var i = 0; i <= n; i++) {
+      var t = i / n;
+      var s1 = Math.sin((1 - t) * omega) / so;
+      var s2 = Math.sin(t * omega) / so;
+      var x = s1*a[0] + s2*b[0], y = s1*a[1] + s2*b[1], z = s1*a[2] + s2*b[2];
+      var lat = Math.asin(z) * RAD;
+      var lon = Math.atan2(y, x) * RAD;
+      out.push([+lon.toFixed(3), +lat.toFixed(3)]);
+    }
+    return out;
+  }
+  function buildArcFeature(arc) {
+    var coords;
+    if (arc.via && arc.via.length) {
+      var pts = [arc.from].concat(arc.via).concat([arc.to]);
+      coords = densifyVia(pts, 12);
+    } else {
+      coords = greatCircle(arc.from, arc.to, 64);
+    }
+    return { type: "Feature",
+      properties: { id: arc.id, label: arc.label || "", mode: arc.mode || "maritime" },
+      geometry: { type: "LineString", coordinates: coords } };
+  }
+
+  var CHOKEPOINT_COORDS = {
+    hormuz:      [56.30, 26.60],
+    malacca:     [102.30, 2.50],
+    babelmandeb: [43.30, 12.60]
+  };
+  var CHOKEPOINT_DISPLAY = {
+    hormuz: "Strait of Hormuz", malacca: "Strait of Malacca", babelmandeb: "Bab el-Mandeb"
+  };
+
+  function loadEnergyData() {
+    // Pipelines
+    fetch("data/energy/pipelines.geojson", { cache: "default" })
+      .then(function (r) { if (!r.ok) throw new Error("pipelines " + r.status); return r.json(); })
+      .then(function (d) { var s = map.getSource("pipelines"); if (s) s.setData(d); })
+      .catch(function (e) { console.warn("energy/pipelines:", e.message); });
+
+    // Flow arcs
+    fetch("data/energy/flow_arcs.json", { cache: "default" })
+      .then(function (r) { if (!r.ok) throw new Error("arcs " + r.status); return r.json(); })
+      .then(function (d) {
+        var arcs = (d && d.arcs) || [];
+        var feats = arcs.map(buildArcFeature);
+        var s = map.getSource("flow-arcs");
+        if (s) s.setData({ type: "FeatureCollection", features: feats });
+      })
+      .catch(function (e) { console.warn("energy/arcs:", e.message); });
+
+    // Oil production -> decorate() reads window.OIL_PRODUCTION via st.iso3.
+    fetch("data/energy/oil_production.json", { cache: "default" })
+      .then(function (r) { if (!r.ok) throw new Error("oil " + r.status); return r.json(); })
+      .then(function (d) {
+        window.OIL_PRODUCTION = d;
+        // refresh country features so f.properties.oil populates
+        if (typeof refreshPower === "function") refreshPower();
+        if (typeof applyYear === "function") applyYear();
+      })
+      .catch(function (e) { console.warn("energy/oil:", e.message); });
+
+    // Chokepoint stress: derive halo radius from latest.all_pct
+    fetch("data/energy/chokepoint_series.json", { cache: "default" })
+      .then(function (r) { if (!r.ok) throw new Error("series " + r.status); return r.json(); })
+      .then(function (d) {
+        window.CHOKEPOINT_SERIES = d;
+        var feats = [];
+        Object.keys(CHOKEPOINT_COORDS).forEach(function (slug) {
+          var block = d && d[slug];
+          if (!block || !block.deltas || !block.deltas.latest) return;
+          var pct = block.deltas.latest.all_pct;
+          var stress = Math.max(0, 100 - (pct == null ? 100 : pct));
+          feats.push({ type: "Feature",
+            properties: { name: CHOKEPOINT_DISPLAY[slug],
+              stress: stress,
+              stress_label: stress + "% below baseline" },
+            geometry: { type: "Point", coordinates: CHOKEPOINT_COORDS[slug] } });
+        });
+        var s = map.getSource("chokepoint-stress");
+        if (s) s.setData({ type: "FeatureCollection", features: feats });
+      })
+      .catch(function (e) { console.warn("energy/series:", e.message); });
   }
 
   function applyFill() {
@@ -911,6 +1112,7 @@
     setVis("fill-vdem", state.fill === "vdem");
     setVis("fill-freexp", state.fill === "freexp");
     setVis("fill-usbases", state.fill === "usbases");
+    setVis("fill-oil", state.fill === "oil");
     ["bases-own"].forEach(function (l) {
       if (state.fill === "usbases") {
         setBaseFilter("bases-own", ["United States"]);
@@ -961,6 +1163,7 @@
       f.properties.gdppc = st.gdppc || 0;
       f.properties.gini = (st.gini === undefined ? -1 : st.gini);
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
+      f.properties.oil = (window.OIL_PRODUCTION || {})[st.iso3 || ""] || 0;
     });
     var s = map.getSource("countries");
     if (s) s.setData(COUNTRIES_GEO);
@@ -1373,6 +1576,16 @@
         row("chk", "lanes", "Shipping lanes (major routes)", state.lanes, null, "#49C5B6"),
         "BRI: solid = operational, dashed = planned. PortWatch rings: 7-day avg daily transits.", false) +
 
+      sec("energy", "Energy &amp; chokepoints",
+        sub("Choropleth") +
+        row("rad", "fill-none-energy", "None", state.fill === "none", "fillgrp") +
+        row("rad", "fill-oil", "Oil production (barrels/day)", state.fill === "oil", "fillgrp") +
+        sub("Stack toggles") +
+        row("chk", "pipelines", "Pipelines (oil amber, gas teal)", state.pipelines, null, "#E8A33D") +
+        row("chk", "flowarcs", "Energy flow arcs (maritime / overland)", state.flowarcs, null, "#E8A33D") +
+        row("chk", "chokestress", "Chokepoint stress halos", state.chokestress, null, "#FFD27F"),
+        "Pipelines: solid = operating, dashed = construction/proposed. Arcs: amber = maritime, teal dashed = overland. Stress halos scale to % collapse vs Jan-Feb 2026 baseline (PortWatch).", false) +
+
       sec("signals", "Live signals",
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
         row("chk", "radar", "Precipitation radar (live)", state.radar, null, "#4DA3FF"),
@@ -1402,7 +1615,8 @@
     byId("btn-reset").onclick = function () {
       state.fill = "none"; state.stat = "none"; state.statMode = "ring";
       ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
-       "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas","terrain3d"].forEach(function (k) { state[k] = false; });
+       "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas","terrain3d",
+       "pipelines","flowarcs","chokestress"].forEach(function (k) { state[k] = false; });
       BLOCS.forEach(function (b) { state[b.key] = false; });
   (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
       applyFill(); switchStat("none");
@@ -1415,7 +1629,10 @@
        ["radar",["radar"]],["clouds",["clouds-base"]],
        ["chokepoints",["chokepoint-dot","chokepoint-label"]],
        ["newspulse",["newspulse"]],["lanes",["lanes-glow","lanes-core"]],
-       ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]]
+       ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]],
+       ["pipelines",["pipelines-line","pipelines-label"]],
+       ["flowarcs",["flow-arcs-line","flow-arcs-label","flow-arcs-arrow"]],
+       ["chokestress",["chokepoint-stress-halo","chokepoint-stress-label"]]
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
       BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
       (window.RESOURCE_TYPES || []).forEach(function (t) {
@@ -1466,14 +1683,14 @@
       tele();
     };
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader", "vdem", "freexp", "usbases"].forEach(function (v) {
+    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader", "vdem", "freexp", "usbases", "oil"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); refreshCard(); tele(); } };
     });
     // The Security and Economy subsections each carry their own "None" radio
     // (separate ids, shared name="fillgrp" so radio uniqueness still holds).
     // Both clear the active fill so the user can opt out per category without
     // scrolling back up to Country fills.
-    ["fill-none-security", "fill-none-econ"].forEach(function (id) {
+    ["fill-none-security", "fill-none-econ", "fill-none-energy"].forEach(function (id) {
       var el = byId("cb-" + id);
       if (el) el.onchange = function (e) {
         if (!e.target.checked) return;
@@ -1548,6 +1765,21 @@
       ["bri-solid","bri-dash","bri-poi","bri-poi-label"].forEach(function (id) { setVis(id, state.bri); });
       tele();
     };
+    byId("cb-pipelines").onchange = function (e) {
+      state.pipelines = e.target.checked;
+      ["pipelines-line","pipelines-label"].forEach(function (id) { setVis(id, state.pipelines); });
+      tele();
+    };
+    byId("cb-flowarcs").onchange = function (e) {
+      state.flowarcs = e.target.checked;
+      ["flow-arcs-line","flow-arcs-label","flow-arcs-arrow"].forEach(function (id) { setVis(id, state.flowarcs); });
+      tele();
+    };
+    byId("cb-chokestress").onchange = function (e) {
+      state.chokestress = e.target.checked;
+      ["chokepoint-stress-halo","chokepoint-stress-label"].forEach(function (id) { setVis(id, state.chokestress); });
+      tele();
+    };
     byId("cb-allymode").onchange = function (e) {
       state.allymode = e.target.checked;
       if (!state.allymode) clearAllies();
@@ -1588,6 +1820,7 @@
     if (state.fill === "freexp") return "V-Dem v2x_freexp_altinf via OWID (CC BY), year " + Math.min(CUR_YEAR, 2025);
     if (state.fill === "usbases") return "After Vine (2021) / IBON (2025): 742 bases, 82 hosts. Dots = curated majors. 2026 snapshot";
     if (state.fill === "conflict") return (window.CONFLICTS_VINTAGE || "Editorial") + " \u00B7 era-bounded by YEAR";
+    if (state.fill === "oil") return "Our World in Data \u00B7 crude+condensate, barrels/day (latest available year)";
     return "";
   }
   function updateLegend() {
@@ -1621,6 +1854,9 @@
       ? [["Christian", "#6C8EBF"], ["Muslim", "#3FA37A"], ["Hindu", "#E8843D"],
          ["Buddhist", "#C9A227"], ["Jewish", "#5BC8FF"], ["Folk", "#B57EDC"],
          ["Unaffil.", "#8A93A6"]]
+      : state.fill === "oil"
+      ? [["0", "#0B1020"], ["250k", "#3A2A14"], ["1M", "#6B4518"],
+         ["4M", "#A86A1E"], ["9M", "#E8A33D"], ["13M b/d", "#FFD27F"]]
       : [];
     el.innerHTML = items.map(function (i) {
       return '<span><i style="background:' + i[1] + '"></i>' + i[0] + "</span>";
