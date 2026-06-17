@@ -595,14 +595,9 @@
         "line-width": 2, "line-dasharray": [2, 1.6] },
       layout: { visibility: "none" } });
 
-    // Shipping lanes — static arteries with a soft glow
-    map.addLayer({ id: "lanes-glow", type: "line", source: "lanes",
-      paint: { "line-color": "#49C5B6", "line-opacity": 0.12,
-        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 3, 10, 10] },
-      layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
+    // Shipping lanes — static arteries, flat slate, no glow.
     map.addLayer({ id: "lanes-core", type: "line", source: "lanes",
-      paint: { "line-color": "#49C5B6", "line-opacity": 0.45,
-        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 1, 10, 3.2] },
+      paint: { "line-color": "#6E7790", "line-opacity": 0.35, "line-width": 1 },
       layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
 
     // PortWatch — live chokepoint traffic rings
@@ -617,16 +612,16 @@
         "text-offset": [0, 1.6], "text-anchor": "top", visibility: "none" },
       paint: { "text-color": "#6FE3D4", "text-halo-color": "#0B1020", "text-halo-width": 1.3 } });
 
-    // Belt and Road corridors: solid = completed, dashed = planned/ongoing
+    // Belt and Road corridors: muted violet, dashed, thin.
     map.addLayer({ id: "bri-solid", type: "line", source: "bri",
       filter: ["==", ["get", "status"], "completed"],
-      paint: { "line-color": "#E8A33D", "line-opacity": 0.8,
-        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 1, 10, 3] },
+      paint: { "line-color": "#A98DD0", "line-opacity": 0.55, "line-dasharray": [2, 2],
+        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 0.8, 10, 2] },
       layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
     map.addLayer({ id: "bri-dash", type: "line", source: "bri",
       filter: ["==", ["get", "status"], "planned"],
-      paint: { "line-color": "#E8A33D", "line-opacity": 0.7, "line-dasharray": [2.2, 1.8],
-        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 1, 10, 2.6] },
+      paint: { "line-color": "#A98DD0", "line-opacity": 0.55, "line-dasharray": [2, 2],
+        "line-width": ["interpolate", ["linear"], ["get", "w"], 1, 0.8, 10, 2] },
       layout: { "line-cap": "round", "line-join": "round", visibility: "none" } });
     map.addLayer({ id: "bri-poi", type: "circle", source: "bri-pois",
       paint: { "circle-radius": ["match", ["get", "kind"], "port", 4.5, 3.5],
@@ -898,18 +893,14 @@
     // we paint an empty FC so the toggle still flips cleanly.
     map.addSource("pipelines",      { type: "geojson", data: fc([]) });
     map.addSource("flow-arcs",      { type: "geojson", data: fc([]) });
-    map.addSource("chokepoint-stress", { type: "geojson", data: fc([]) });
 
-    // 2a. Pipelines: gas teal, oil amber; operating solid, non-operating dashed.
+    // 2a. Pipelines: oil amber solid, gas teal solid.
     map.addLayer({ id: "pipelines-line", type: "line", source: "pipelines",
       layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
       paint: {
         "line-color": ["match", ["get", "substance"], "gas", "#7FD1C4", "#E8A33D"],
         "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.2, 6, 3.5],
-        "line-opacity": 0.9,
-        "line-dasharray": ["case",
-          ["==", ["get", "status"], "operating"], ["literal", [1, 0]],
-          ["literal", [2, 2]]]
+        "line-opacity": 1
       } });
     map.addLayer({ id: "pipelines-label", type: "symbol", source: "pipelines",
       minzoom: 3.2,
@@ -920,6 +911,9 @@
 
     // 2b. Oil-production choropleth.
     // f.properties.oil is set per-feature in decorate() via ISO3 join.
+    // beforeId "fill-tier" inserts it at the very bottom of the custom stack —
+    // just above the basemap and below every zone/line/arc/marker layer — so
+    // pipelines and flow arcs stay visible when the choropleth is on.
     map.addLayer({ id: "fill-oil", type: "fill", source: "countries",
       paint: {
         "fill-color": ["interpolate", ["linear"], ["coalesce", ["get", "oil"], 0],
@@ -929,18 +923,18 @@
           4000000,   "#A86A1E",
           9000000,   "#E8A33D",
           13000000,  "#FFD27F"],
-        "fill-opacity": 0.85 },
-      layout: { visibility: "none" } });
+        "fill-opacity": 0.6 },
+      layout: { visibility: "none" } }, "fill-tier");
 
-    // 2c. Flow arcs: maritime amber solid, overland teal dashed.
+    // 2c. Flow arcs: pale-gold; maritime solid, overland dashed.
     map.addLayer({ id: "flow-arcs-line", type: "line", source: "flow-arcs",
       layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
       paint: {
-        "line-color": ["match", ["get", "mode"], "overland", "#7FD1C4", "#E8A33D"],
+        "line-color": "#FFE6B8",
         "line-dasharray": ["match", ["get", "mode"],
           "overland", ["literal", [2, 2]], ["literal", [1, 0]]],
-        "line-width": ["interpolate", ["linear"], ["zoom"], 2, 1.5, 6, 4],
-        "line-opacity": 0.85
+        "line-width": ["interpolate", ["linear"], ["zoom"], 2, 2, 6, 5],
+        "line-opacity": 0.9
       } });
     map.addLayer({ id: "flow-arcs-label", type: "symbol", source: "flow-arcs",
       layout: { "text-field": ["get", "label"], "text-font": ["Open Sans Regular"],
@@ -953,28 +947,11 @@
       layout: { "text-field": "▶", "text-font": ["Open Sans Regular"],
         "text-size": 11, "symbol-placement": "line",
         "symbol-spacing": 90, "text-keep-upright": false, visibility: "none" },
-      paint: { "text-color": ["match", ["get", "mode"], "overland", "#7FD1C4", "#E8A33D"],
+      paint: { "text-color": "#FFE6B8",
         "text-halo-color": "#0B1020", "text-halo-width": 1.2 } });
 
-    // 2d. Chokepoint stress: amber halo whose radius scales with collapse
-    // (100 - latest tanker_pct, falling back to tanker_capacity_pct, then
-    // all_pct). Bigger halo = more pressure on oil throughput.
-    map.addLayer({ id: "chokepoint-stress-halo", type: "circle", source: "chokepoint-stress",
-      paint: {
-        "circle-radius": ["interpolate", ["linear"], ["get", "stress"],
-          0, 8, 20, 18, 50, 30, 80, 46],
-        "circle-color": "#E8A33D",
-        "circle-opacity": 0.18,
-        "circle-stroke-color": "#E8A33D",
-        "circle-stroke-width": 1.6,
-        "circle-stroke-opacity": 0.85,
-        "circle-blur": 0.4 },
-      layout: { visibility: "none" } });
-    map.addLayer({ id: "chokepoint-stress-label", type: "symbol", source: "chokepoint-stress",
-      layout: { "text-field": ["concat", ["get", "name"], "  ", ["get", "stress_label"]],
-        "text-font": ["Open Sans Regular"], "text-size": 11.5,
-        "text-offset": [0, 1.8], "text-anchor": "top", visibility: "none" },
-      paint: { "text-color": "#FFD27F", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
+    // 2d. Chokepoint stress is rendered as fixed-size ring-gauge HTML markers
+    // (see buildChokepointGauges), not map layers — no glow/halo circles.
 
     // Kick off the async loaders. Each failure leaves an empty FC, never throws.
     loadEnergyData();
@@ -1097,39 +1074,84 @@
       window.CHOKEPOINT_SERIES = series;
       window.CHOKEPOINT_EDITORIAL = editorial;
 
-      function fmtMbd(barrels) {
-        var mbd = barrels / 1e6;
-        return (mbd >= 10 ? mbd.toFixed(1) : mbd.toFixed(2)) + " mb/d";
-      }
-
-      var feats = [];
+      // Build one fixed-size ring-gauge marker per chokepoint that has an
+      // editorial (baseline_bbl_day, pct_of_normal) entry.
+      var gauges = [];
       Object.keys(CHOKEPOINT_COORDS).forEach(function (slug) {
         var ed = editorial && editorial[slug];
-        var stress, label;
-        if (ed && ed.pct_of_normal != null) {
-          var pct = ed.pct_of_normal;
-          stress = Math.max(0, 100 - pct);
-          var flow = (ed.baseline_bbl_day || 0) * pct / 100;
-          label = fmtMbd(flow) + " (" + pct + "% of normal)";
-        } else {
-          var block = series && series[slug];
-          if (!block || !block.deltas || !block.deltas.latest) return;
-          var latest = block.deltas.latest;
-          var p = (latest.tanker_pct != null) ? latest.tanker_pct
-                : (latest.tanker_capacity_pct != null) ? latest.tanker_capacity_pct
-                : latest.all_pct;
-          if (p == null) return;
-          stress = Math.max(0, 100 - p);
-          label = stress + "% below baseline (tankers, " + latest.date + ")";
-        }
-        feats.push({ type: "Feature",
-          properties: { name: CHOKEPOINT_DISPLAY[slug],
-            stress: stress, stress_label: label },
-          geometry: { type: "Point", coordinates: CHOKEPOINT_COORDS[slug] } });
+        if (!ed || ed.pct_of_normal == null || ed.baseline_bbl_day == null) return;
+        gauges.push({
+          slug: slug,
+          name: CHOKEPOINT_DISPLAY[slug],
+          coords: CHOKEPOINT_COORDS[slug],
+          baseline: ed.baseline_bbl_day,
+          pct: ed.pct_of_normal
+        });
       });
-      var s = map.getSource("chokepoint-stress");
-      if (s) s.setData({ type: "FeatureCollection", features: feats });
+      buildChokepointGauges(gauges);
     }).catch(function (e) { console.warn("energy/chokepoint:", e.message); });
+  }
+
+  // ---- Chokepoint ring-gauge markers -------------------------------------
+  // Fixed-pixel SVG markers (the element never scales with the data — only the
+  // arc sweep and the centre dot encode the numbers). Severity colour:
+  // pct<20 red, 20–70 amber, >70 green.
+  var chokepointMarkers = [];
+  function chokeSeverityColor(pct) {
+    return pct < 20 ? "#E24B4A" : pct <= 70 ? "#EF9F27" : "#5DCAA5";
+  }
+  // SVG arc path from 12 o'clock, sweeping clockwise by `frac` of a full turn.
+  function ringArcPath(cx, cy, r, frac) {
+    frac = Math.max(0, Math.min(0.9999, frac));
+    var a0 = -Math.PI / 2;                       // 12 o'clock
+    var a1 = a0 + frac * 2 * Math.PI;            // clockwise (SVG y-down)
+    var x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0);
+    var x1 = cx + r * Math.cos(a1), y1 = cy + r * Math.sin(a1);
+    var large = frac > 0.5 ? 1 : 0;
+    return "M " + x0.toFixed(2) + " " + y0.toFixed(2) +
+           " A " + r + " " + r + " 0 " + large + " 1 " +
+           x1.toFixed(2) + " " + y1.toFixed(2);
+  }
+  function fmtMbd2(barrels) {
+    var mbd = barrels / 1e6;
+    return (mbd >= 10 ? mbd.toFixed(1) : mbd.toFixed(2));
+  }
+  function buildChokepointGauges(gauges) {
+    if (typeof maplibregl === "undefined") return;
+    chokepointMarkers.forEach(function (m) { m.remove(); });
+    chokepointMarkers = [];
+
+    var R = 18, SIZE = 44, C = SIZE / 2;          // fixed pixel geometry
+    gauges.forEach(function (g) {
+      var color = chokeSeverityColor(g.pct);
+      var current = g.baseline * g.pct / 100;     // bbl/day
+      var dotR = Math.sqrt(current / 1e6) * 2.6;  // area ∝ current mb/d
+      dotR = Math.max(1.5, Math.min(R - 2, dotR));
+      var arc = ringArcPath(C, C, R, g.pct / 100);
+
+      var el = document.createElement("div");
+      el.className = "choke-gauge";
+      el.style.display = state.chokestress ? "" : "none";
+      el.innerHTML =
+        '<svg width="' + SIZE + '" height="' + SIZE + '" viewBox="0 0 ' + SIZE + ' ' + SIZE + '">' +
+          '<circle cx="' + C + '" cy="' + C + '" r="' + R + '" fill="none" ' +
+            'stroke="#2E3650" stroke-width="3"/>' +
+          '<path d="' + arc + '" fill="none" stroke="' + color + '" ' +
+            'stroke-width="3" stroke-linecap="round"/>' +
+          '<circle cx="' + C + '" cy="' + C + '" r="' + dotR.toFixed(2) + '" fill="' + color + '"/>' +
+        '</svg>' +
+        '<div class="choke-gauge-label">' + g.name + '<br>' +
+          fmtMbd2(current) + ' mb/d · ' + g.pct + '% of normal</div>';
+
+      var marker = new maplibregl.Marker({ element: el, anchor: "center" })
+        .setLngLat(g.coords).addTo(map);
+      chokepointMarkers.push(marker);
+    });
+  }
+  function setChokepointGaugesVisible(on) {
+    chokepointMarkers.forEach(function (m) {
+      m.getElement().style.display = on ? "" : "none";
+    });
   }
 
   function applyFill() {
@@ -1662,12 +1684,12 @@
        ["shatter",["shatter-fill","shatter-line"]],["deltas",["deltas-fill","deltas-label"]],
        ["radar",["radar"]],["clouds",["clouds-base"]],
        ["chokepoints",["chokepoint-dot","chokepoint-label"]],
-       ["newspulse",["newspulse"]],["lanes",["lanes-glow","lanes-core"]],
+       ["newspulse",["newspulse"]],["lanes",["lanes-core"]],
        ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]],
        ["pipelines",["pipelines-line","pipelines-label"]],
-       ["flowarcs",["flow-arcs-line","flow-arcs-label","flow-arcs-arrow"]],
-       ["chokestress",["chokepoint-stress-halo","chokepoint-stress-label"]]
+       ["flowarcs",["flow-arcs-line","flow-arcs-label","flow-arcs-arrow"]]
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
+      setChokepointGaugesVisible(false);
       BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
       (window.RESOURCE_TYPES || []).forEach(function (t) {
         state["res" + t[0]] = false;
@@ -1788,7 +1810,7 @@
     };
     byId("cb-lanes").onchange = function (e) {
       state.lanes = e.target.checked;
-      setVis("lanes-glow", state.lanes); setVis("lanes-core", state.lanes); tele();
+      setVis("lanes-core", state.lanes); tele();
     };
     byId("cb-portwatch").onchange = function (e) {
       state.portwatch = e.target.checked;
@@ -1811,7 +1833,7 @@
     };
     byId("cb-chokestress").onchange = function (e) {
       state.chokestress = e.target.checked;
-      ["chokepoint-stress-halo","chokepoint-stress-label"].forEach(function (id) { setVis(id, state.chokestress); });
+      setChokepointGaugesVisible(state.chokestress);
       tele();
     };
     byId("cb-allymode").onchange = function (e) {

@@ -244,6 +244,21 @@ html, body {
 }
 .overlay.error .pulse { color: var(--signal); max-width: 460px; text-align: center; line-height: 1.7; }
 
+/* Chokepoint ring-gauge markers — fixed-size, no glow/blur. */
+.choke-gauge {
+  position: relative; display: inline-block;
+  pointer-events: none; line-height: 1;
+}
+.choke-gauge svg { display: block; }
+.choke-gauge-label {
+  position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  margin-top: 2px; text-align: center; white-space: nowrap;
+  font-family: "IBM Plex Mono", monospace; font-size: 10px; line-height: 1.35;
+  color: var(--parchment);
+  text-shadow: 1px 0 0 var(--ink), -1px 0 0 var(--ink),
+               0 1px 0 var(--ink), 0 -1px 0 var(--ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
