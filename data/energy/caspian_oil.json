@@ -1,0 +1,85 @@
+{
+  "_note": "Editorial Caspian-basin oil movements. Iran sends ~none of its OWN crude north across the (landlocked) Caspian — its export terminals are all on the Gulf (Kharg). Iran's actual Caspian oil activity is the NEKA SWAP: Russian/Kazakh/Turkmen crude is tankered IN to Neka for Iran's northern refineries, and Iran delivers an EQUIVALENT volume of its own crude OUT at the Gulf. So 'Iranian oil through the Caspian' = actual swap throughput, which is small and intermittent (far below the ~370k bpd Neka terminal capacity). All bpd are dated editorial estimates with sources; rounded, not precise telemetry. Edit freely.",
+
+  "iran_swap": {
+    "label": "Iran Caspian swap (Neka)",
+    "actual_bpd": 50000,
+    "capacity_bpd": 370000,
+    "peak_bpd": 120000,
+    "peak_year": "2008",
+    "status": "Revived 2023 after a 2010-2022 suspension; small cargoes from Russia, Turkmenistan, Kazakhstan.",
+    "date": "2025",
+    "source": "EIA/MEES historical Neka throughput (~120k bpd peak, 370k design); Reuters 2023-2024 on Russia-Iran & Turkmenistan-Iran swap revival (small actual volumes)."
+  },
+
+  "flows": [
+    {
+      "id": "ru-neka", "iran": true, "kind": "tanker",
+      "label": "Russia -> Neka (swap-in)", "actual_bpd": 20000,
+      "from": [47.50, 42.98], "to": [53.30, 36.70],
+      "via": [[49.5, 41.5], [51.5, 39.0], [52.8, 37.6]],
+      "source": "Reuters 2023-2024, Russia-Iran Caspian crude swap (Makhachkala/Astrakhan -> Neka)."
+    },
+    {
+      "id": "tm-neka", "iran": true, "kind": "tanker",
+      "label": "Turkmenistan -> Neka (swap-in)", "actual_bpd": 18000,
+      "from": [53.00, 40.02], "to": [53.30, 36.70],
+      "via": [[53.4, 38.6], [53.5, 37.5]],
+      "source": "Turkmenistan-Iran swap revived Jan 2022 (Turkmenbashi -> Neka)."
+    },
+    {
+      "id": "kz-neka", "iran": true, "kind": "tanker",
+      "label": "Kazakhstan -> Neka (swap-in)", "actual_bpd": 12000,
+      "from": [51.16, 43.65], "to": [53.30, 36.70],
+      "via": [[51.9, 42.0], [52.6, 40.0], [53.1, 38.0], [53.3, 37.2]],
+      "source": "Kazakh crude swap cargoes to Neka, editorial est."
+    },
+    {
+      "id": "iran-swapout", "iran": true, "kind": "swapout",
+      "label": "Iran swap-out: equal crude delivered at Kharg (Gulf)", "actual_bpd": 50000,
+      "from": [50.32, 29.23], "to": [56.50, 26.60],
+      "via": [[51.6, 28.4], [54.0, 27.4]],
+      "source": "Swap settles southbound: Iran lifts equivalent crude at Gulf terminals for the counterparties' buyers."
+    },
+
+    {
+      "id": "kz-baku", "iran": false, "kind": "tanker",
+      "label": "Kazakhstan -> Baku (trans-Caspian, feeds BTC)", "actual_bpd": 30000,
+      "from": [51.16, 43.65], "to": [49.85, 40.40],
+      "via": [[50.6, 42.6], [50.0, 41.3]],
+      "source": "KazMunayGas trans-Caspian crude into BTC, started 2023 (~1.5 Mt/yr ramping)."
+    },
+    {
+      "id": "cpc", "iran": false, "kind": "pipeline",
+      "label": "CPC pipeline: Tengiz -> Novorossiysk (Black Sea)", "actual_bpd": 1400000,
+      "from": [53.40, 46.20], "to": [37.78, 44.72],
+      "via": [[50.0, 46.6], [46.0, 46.0], [43.0, 45.6], [40.0, 45.0]],
+      "source": "Caspian Pipeline Consortium ~63 Mt in 2023 (~1.4M bpd); dominant Caspian export route, mostly Kazakh."
+    },
+    {
+      "id": "btc", "iran": false, "kind": "pipeline",
+      "label": "BTC pipeline: Baku -> Ceyhan (Mediterranean)", "actual_bpd": 600000,
+      "from": [49.85, 40.40], "to": [35.82, 36.98],
+      "via": [[47.0, 41.3], [44.8, 41.72], [41.0, 40.0], [38.0, 38.0], [36.5, 37.2]],
+      "source": "Baku-Tbilisi-Ceyhan ~0.6M bpd (2023), Azeri + trans-Caspian Kazakh crude."
+    },
+    {
+      "id": "atyrau-samara", "iran": false, "kind": "pipeline",
+      "label": "Atyrau -> Samara (into Russian Druzhba system)", "actual_bpd": 250000,
+      "from": [51.92, 47.11], "to": [50.10, 53.20],
+      "via": [[51.0, 49.0], [50.5, 51.0]],
+      "source": "Kazakh crude into the Russian trunk system, editorial est."
+    }
+  ],
+
+  "nodes": [
+    { "id": "neka", "name": "Neka", "iran": true, "coords": [53.30, 36.70],
+      "note": "Iran's Caspian swap terminal -> Tehran/Rey/Tabriz refineries" },
+    { "id": "kharg", "name": "Kharg", "iran": true, "coords": [50.32, 29.23],
+      "note": "Iran's main Gulf export island (swap-out point)" },
+    { "id": "baku", "name": "Baku", "iran": false, "coords": [49.85, 40.40], "note": "Azerbaijan / BTC head" },
+    { "id": "aktau", "name": "Aktau", "iran": false, "coords": [51.16, 43.65], "note": "Kazakhstan trans-Caspian port" },
+    { "id": "turkmenbashi", "name": "Turkmenbashi", "iran": false, "coords": [53.00, 40.02], "note": "Turkmenistan port" },
+    { "id": "makhachkala", "name": "Makhachkala", "iran": false, "coords": [47.50, 42.98], "note": "Russia Caspian port" }
+  ]
+}

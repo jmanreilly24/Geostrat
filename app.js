@@ -191,7 +191,7 @@
     heat: false, heartland: false, rimland: false, nuclear: false,
     chokepoints: false, newspulse: false, lanes: false, portwatch: false, bri: false,
     allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false,
-    pipelines: false, flowarcs: false, chokestress: false
+    pipelines: false, flowarcs: false, chokestress: false, caspian: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
   (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
@@ -893,6 +893,8 @@
     // we paint an empty FC so the toggle still flips cleanly.
     map.addSource("pipelines",      { type: "geojson", data: fc([]) });
     map.addSource("flow-arcs",      { type: "geojson", data: fc([]) });
+    map.addSource("caspian",        { type: "geojson", data: fc([]) });
+    map.addSource("caspian-nodes",  { type: "geojson", data: fc([]) });
 
     // 2a. Pipelines: oil amber solid, gas teal solid.
     map.addLayer({ id: "pipelines-line", type: "line", source: "pipelines",
@@ -949,6 +951,47 @@
         "symbol-spacing": 90, "text-keep-upright": false, visibility: "none" },
       paint: { "text-color": "#FFE6B8",
         "text-halo-color": "#0B1020", "text-halo-width": 1.2 } });
+
+    // 2e. Caspian oil shipping. Iran-tagged flows (the Neka swap) are amber and
+    // prominent; non-Iran Caspian export flows (CPC, BTC, Atyrau, KZ->Baku) are
+    // teal context. Tanker legs solid, the Iran swap-out settlement leg dashed.
+    map.addLayer({ id: "caspian-line", type: "line", source: "caspian",
+      layout: { "line-cap": "round", "line-join": "round", visibility: "none" },
+      paint: {
+        "line-color": ["case", ["get", "iran"], "#E8A33D", "#7FD1C4"],
+        "line-dasharray": ["case",
+          ["==", ["get", "kind"], "swapout"], ["literal", [3, 2]],
+          ["literal", [1, 0]]],
+        "line-width": ["case", ["get", "iran"],
+          ["interpolate", ["linear"], ["zoom"], 2, 2.2, 6, 5],
+          ["interpolate", ["linear"], ["zoom"], 2, 1.2, 6, 3]],
+        "line-opacity": ["case", ["get", "iran"], 0.95, 0.7]
+      } });
+    map.addLayer({ id: "caspian-arrow", type: "symbol", source: "caspian",
+      layout: { "text-field": "▶", "text-font": ["Open Sans Regular"],
+        "text-size": 11, "symbol-placement": "line",
+        "symbol-spacing": 110, "text-keep-upright": false, visibility: "none" },
+      paint: { "text-color": ["case", ["get", "iran"], "#E8A33D", "#7FD1C4"],
+        "text-halo-color": "#0B1020", "text-halo-width": 1.2 } });
+    map.addLayer({ id: "caspian-label", type: "symbol", source: "caspian",
+      minzoom: 3.4,
+      layout: { "text-field": ["get", "label_bpd"], "text-font": ["Open Sans Regular"],
+        "text-size": 10, "symbol-placement": "line", "symbol-spacing": 600,
+        "text-anchor": "center", visibility: "none" },
+      paint: { "text-color": "#E8E6DF", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
+    map.addLayer({ id: "caspian-node", type: "circle", source: "caspian-nodes",
+      paint: {
+        "circle-radius": ["case", ["get", "iran"], 4.5, 3],
+        "circle-color": ["case", ["get", "iran"], "#E8A33D", "#7FD1C4"],
+        "circle-stroke-color": "#0B1020", "circle-stroke-width": 1.3 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "caspian-node-label", type: "symbol", source: "caspian-nodes",
+      layout: { "text-field": ["get", "node_label"], "text-font": ["Open Sans Regular"],
+        "text-size": ["case", ["get", "iran"], 11.5, 10],
+        "text-offset": [0, 0.9], "text-anchor": "top", "text-allow-overlap": false,
+        visibility: "none" },
+      paint: { "text-color": ["case", ["get", "iran"], "#FFD27F", "#E8E6DF"],
+        "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
 
     // 2d. Chokepoint stress is rendered as fixed-size ring-gauge HTML markers
     // (see buildChokepointGauges), not map layers — no glow/halo circles.
@@ -1015,6 +1058,51 @@
       geometry: { type: "LineString", coordinates: coords } };
   }
 
+  // ---- Caspian oil shipping ----------------------------------------------
+  function fmtBpd(n) {
+    if (n == null) return "";
+    return n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, "") + "M bpd"
+                    : Math.round(n / 1e3) + "k bpd";
+  }
+  function buildCaspianOil(d) {
+    if (!d) return;
+    // Flow lines (tanker legs densify through `via`; pipelines do too).
+    var lineFeats = (d.flows || []).map(function (fl) {
+      var pts = [fl.from].concat(fl.via || []).concat([fl.to]);
+      return { type: "Feature",
+        properties: {
+          id: fl.id, iran: !!fl.iran, kind: fl.kind || "tanker",
+          label: fl.label || "",
+          label_bpd: (fl.label || "") + (fl.actual_bpd != null ? "  ·  " + fmtBpd(fl.actual_bpd) : "")
+        },
+        geometry: { type: "LineString", coordinates: densifyVia(pts, 10) } };
+    });
+    var ls = map.getSource("caspian");
+    if (ls) ls.setData({ type: "FeatureCollection", features: lineFeats });
+
+    // Nodes. Neka carries the headline Iran-swap readout (actual vs capacity).
+    var sw = d.iran_swap || {};
+    var nodeFeats = (d.nodes || []).map(function (nd) {
+      var lbl = nd.name;
+      if (nd.id === "neka") {
+        lbl = "Neka — Iran Caspian swap\n" + fmtBpd(sw.actual_bpd) + " actual (est.) · "
+            + fmtBpd(sw.capacity_bpd) + " capacity";
+      } else if (nd.id === "kharg") {
+        lbl = "Kharg — Iran Gulf swap-out";
+      }
+      return { type: "Feature",
+        properties: { id: nd.id, iran: !!nd.iran, node_label: lbl },
+        geometry: { type: "Point", coordinates: nd.coords } };
+    });
+    var ns = map.getSource("caspian-nodes");
+    if (ns) ns.setData({ type: "FeatureCollection", features: nodeFeats });
+  }
+  var CASPIAN_LAYERS = ["caspian-line", "caspian-arrow", "caspian-label",
+    "caspian-node", "caspian-node-label"];
+  function setCaspianVisible(on) {
+    CASPIAN_LAYERS.forEach(function (id) { setVis(id, on); });
+  }
+
   var CHOKEPOINT_COORDS = {
     hormuz:      [56.30, 26.60],
     malacca:     [102.30, 2.50],
@@ -1041,6 +1129,12 @@
         if (s) s.setData({ type: "FeatureCollection", features: feats });
       })
       .catch(function (e) { console.warn("energy/arcs:", e.message); });
+
+    // Caspian oil shipping (Iran swap-focused).
+    fetch("data/energy/caspian_oil.json", { cache: "default" })
+      .then(function (r) { if (!r.ok) throw new Error("caspian " + r.status); return r.json(); })
+      .then(function (d) { window.CASPIAN_OIL = d; buildCaspianOil(d); })
+      .catch(function (e) { console.warn("energy/caspian:", e.message); });
 
     // Oil production -> decorate() reads window.OIL_PRODUCTION via st.iso3.
     fetch("data/energy/oil_production.json", { cache: "default" })
@@ -1639,8 +1733,9 @@
         sub("Stack toggles") +
         row("chk", "pipelines", "Pipelines (oil amber, gas teal)", state.pipelines, null, "#E8A33D") +
         row("chk", "flowarcs", "Energy flow arcs (maritime / overland)", state.flowarcs, null, "#E8A33D") +
-        row("chk", "chokestress", "Chokepoint stress halos", state.chokestress, null, "#FFD27F"),
-        "Pipelines: solid = operating, dashed = construction/proposed. Arcs: amber = maritime, teal dashed = overland. Stress halos scale to % collapse vs Jan-Feb 2026 baseline (PortWatch).", false) +
+        row("chk", "chokestress", "Chokepoint stress halos", state.chokestress, null, "#FFD27F") +
+        row("chk", "caspian", "Caspian oil shipping (Iran swap)", state.caspian, null, "#E8A33D"),
+        "Pipelines: solid = operating, dashed = construction/proposed. Arcs: amber = maritime, teal dashed = overland. Stress halos scale to % collapse vs Jan-Feb 2026 baseline (PortWatch). Caspian: amber = Iran's Neka swap (actual bpd, est.), teal = other Caspian export flows (CPC, BTC). Iran ships ~none of its own crude north — the bpd shown is actual swap throughput, not the ~370k bpd terminal capacity.", false) +
 
       sec("signals", "Live signals",
         row("chk", "newspulse", "News pulse (GDELT)", state.newspulse, null, "#5BC8FF") +
@@ -1672,7 +1767,7 @@
       state.fill = "none"; state.stat = "none"; state.statMode = "ring";
       ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
        "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas","terrain3d",
-       "pipelines","flowarcs","chokestress"].forEach(function (k) { state[k] = false; });
+       "pipelines","flowarcs","chokestress","caspian"].forEach(function (k) { state[k] = false; });
       BLOCS.forEach(function (b) { state[b.key] = false; });
   (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
       applyFill(); switchStat("none");
@@ -1690,6 +1785,7 @@
        ["flowarcs",["flow-arcs-line","flow-arcs-label","flow-arcs-arrow"]]
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
       setChokepointGaugesVisible(false);
+      setCaspianVisible(false);
       BLOCS.forEach(function (b) { setVis("bloc-" + b.key, false); });
       (window.RESOURCE_TYPES || []).forEach(function (t) {
         state["res" + t[0]] = false;
@@ -1834,6 +1930,11 @@
     byId("cb-chokestress").onchange = function (e) {
       state.chokestress = e.target.checked;
       setChokepointGaugesVisible(state.chokestress);
+      tele();
+    };
+    byId("cb-caspian").onchange = function (e) {
+      state.caspian = e.target.checked;
+      setCaspianVisible(state.caspian);
       tele();
     };
     byId("cb-allymode").onchange = function (e) {
