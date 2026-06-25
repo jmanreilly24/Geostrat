@@ -15,6 +15,7 @@ INDICATORS = {
     "gini": ["SI.POV.GINI"],
     "trade": ["BN.CAB.XOKA.GD.ZS", "NE.RSB.GNFS.ZS"],  # current acct / ext balance % GDP
     "tradeusd": ["BN.CAB.XOKA.CD"],  # current account balance, current US$/yr
+    "arable": ["AG.LND.ARBL.ZS"],  # arable land, % of land area
 }
 COMPOSITE_KEYS = ["milex", "milper", "pop", "urb", "gdp"]
 
@@ -142,7 +143,7 @@ def main():
         entry = {"iso3": iso3}
         if shares:
             entry["composite"] = round(sum(shares) / len(shares), 4)
-        for k in ("gdp", "gdppc", "pop", "milex", "milper", "renew", "gini", "trade", "tradeusd"):
+        for k in ("gdp", "gdppc", "pop", "milex", "milper", "renew", "gini", "trade", "tradeusd", "arable"):
             v = raw.get(k, {}).get(iso3)
             if v is not None:
                 entry[k] = round(v)

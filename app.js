@@ -191,7 +191,8 @@
     heat: false, heartland: false, rimland: false, nuclear: false,
     chokepoints: false, newspulse: false, lanes: false, portwatch: false, bri: false,
     allymode: false, advmode: false, basesmode: false, flat: false, islandchains: false, pearls: false, shatter: false, radar: false, clouds: false, deltas: false, terrain3d: false,
-    pipelines: false, flowarcs: false, chokestress: false, caspian: false
+    pipelines: false, flowarcs: false, chokestress: false, caspian: false,
+    worldisland: false, panregions: false, cropland: false, wheat: false, rice: false
   };
   BLOCS.forEach(function (b) { state[b.key] = false; });
   (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
@@ -363,6 +364,7 @@
       f.properties.gdppc = st.gdppc || 0;
       f.properties.gini = (st.gini === undefined ? -1 : st.gini);
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
+      f.properties.arable = (st.arable === undefined ? -1 : st.arable);
       f.properties.relig = (window.RELIGION || {})[f.properties.cname] || "none";
       f.properties.trader = traderAt(f.properties.cname, CUR_YEAR);
       f.properties.vdem = vdemAt("libdem", CUR_YEAR, f.properties.cname);
@@ -513,6 +515,13 @@
     map.addLayer({ id: "fill-freexp", type: "fill", source: "countries",
       paint: { "fill-color": ["interpolate", ["linear"], ["get", "freexp"],
         -1, "#222C3B", 0, "#3B1F4F", 25, "#6E2F8A", 50, "#A07AC4", 75, "#5BC8FF", 100, "#A8E8FF"],
+        "fill-opacity": 0.62 },
+      layout: { visibility: "none" } });
+
+    // Arable land — % of land area (World Bank AG.LND.ARBL.ZS); missing = -1 dark
+    map.addLayer({ id: "fill-arable", type: "fill", source: "countries",
+      paint: { "fill-color": ["interpolate", ["linear"], ["get", "arable"],
+        -1, "#222C3B", 0, "#23331F", 10, "#3E5A2A", 25, "#6E8F38", 40, "#A8C24A", 60, "#E4E86A"],
         "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
@@ -833,6 +842,54 @@
     map.addLayer({ id: "shatter-line", type: "line", source: "shatterbelts",
       paint: { "line-color": "#C44569", "line-width": 1.3, "line-dasharray": [2, 2], "line-opacity": 0.75 },
       layout: { visibility: "none" } });
+
+    // ---- Haushofer / World-Island (Map 34) -------------------------------
+    // One stackable toggle ("worldisland") drives three sub-features filtered
+    // out of the same source: the desert/steppe belt, the monsoon coastlands
+    // (the original map's dark "inner crescent"), and the World-Island boundary.
+    var HF = window.HAUSHOFER || { worldIsland: fc([]), panRegions: fc([]) };
+    map.addSource("haushofer-wi", { type: "geojson", data: HF.worldIsland });
+    map.addLayer({ id: "hf-desert-fill", type: "fill", source: "haushofer-wi",
+      filter: ["==", ["get", "kind"], "desert"],
+      paint: { "fill-color": "#C9A24B", "fill-opacity": 0.16 }, layout: { visibility: "none" } });
+    map.addLayer({ id: "hf-desert-line", type: "line", source: "haushofer-wi",
+      filter: ["==", ["get", "kind"], "desert"],
+      paint: { "line-color": "#C9A24B", "line-width": 1, "line-dasharray": [3, 2], "line-opacity": 0.6 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "hf-monsoon-fill", type: "fill", source: "haushofer-wi",
+      filter: ["==", ["get", "kind"], "monsoon"],
+      paint: { "fill-color": "#2E6E8E", "fill-opacity": 0.42 }, layout: { visibility: "none" } });
+    map.addLayer({ id: "hf-boundary-line", type: "line", source: "haushofer-wi",
+      filter: ["==", ["get", "kind"], "boundary"],
+      paint: { "line-color": "#E8A33D", "line-width": 1.8, "line-dasharray": [4, 2], "line-opacity": 0.85 },
+      layout: { "line-cap": "round", visibility: "none" } });
+
+    // ---- Haushofer pan-regions (four meridional blocs) -------------------
+    map.addSource("haushofer-pan", { type: "geojson", data: HF.panRegions });
+    var PAN_COLOR = ["match", ["get", "kind"],
+      "pan-america", "#4DA3FF", "pan-eurafrica", "#E8843D",
+      "pan-russia", "#C44569", "pan-asia", "#C9A227", "#8A93A6"];
+    map.addLayer({ id: "hf-pan-fill", type: "fill", source: "haushofer-pan",
+      paint: { "fill-color": PAN_COLOR, "fill-opacity": 0.15 }, layout: { visibility: "none" } });
+    map.addLayer({ id: "hf-pan-line", type: "line", source: "haushofer-pan",
+      paint: { "line-color": PAN_COLOR, "line-width": 1.4, "line-opacity": 0.7 },
+      layout: { visibility: "none" } });
+    map.addLayer({ id: "hf-pan-label", type: "symbol", source: "haushofer-pan",
+      layout: { "text-field": ["get", "name"], "text-font": ["Open Sans Regular"],
+        "text-size": 12, "text-allow-overlap": false, visibility: "none" },
+      paint: { "text-color": "#E8E6DF", "text-halo-color": "#0B1020", "text-halo-width": 1.4 } });
+
+    // ---- Agriculture: cropland extent, wheat belts, rice regions ---------
+    [["cropland", window.CROPLAND_REGIONS, "#6FB36F", "#9AD79A"],
+     ["wheat", window.WHEAT_BELTS, "#E8C45A", "#F2D880"],
+     ["rice", window.RICE_REGIONS, "#4FC3A1", "#86E8C6"]].forEach(function (a) {
+      map.addSource("ag-" + a[0], { type: "geojson", data: a[1] || fc([]) });
+      map.addLayer({ id: a[0] + "-fill", type: "fill", source: "ag-" + a[0],
+        paint: { "fill-color": a[2], "fill-opacity": 0.34 }, layout: { visibility: "none" } });
+      map.addLayer({ id: a[0] + "-line", type: "line", source: "ag-" + a[0],
+        paint: { "line-color": a[3], "line-width": 1, "line-opacity": 0.7 },
+        layout: { visibility: "none" } });
+    });
 
     // natural resource deposits — points (named fields) + hatched basin polygons.
     // Basins paint underneath the dots; both share the resource toggle.
@@ -1256,6 +1313,7 @@
     setVis("fill-milex", state.fill === "milex");
     setVis("fill-gini", state.fill === "gini");
     setVis("fill-trade", state.fill === "trade");
+    setVis("fill-arable", state.fill === "arable");
     setVis("fill-religion", state.fill === "religion");
     setVis("fill-conflict", state.fill === "conflict");
     setVis("fill-trader", state.fill === "trader");
@@ -1313,6 +1371,7 @@
       f.properties.gdppc = st.gdppc || 0;
       f.properties.gini = (st.gini === undefined ? -1 : st.gini);
       f.properties.trade = (st.trade === undefined ? -999 : st.trade);
+      f.properties.arable = (st.arable === undefined ? -1 : st.arable);
       f.properties.oil = (window.OIL_PRODUCTION || {})[st.iso3 || ""] || 0;
     });
     var s = map.getSource("countries");
@@ -1648,6 +1707,7 @@
     // Country-fill radios are split across three sections (general / security /
     // economy) but share name="fillgrp" so only one can be active at a time.
     var fillsGeneral = [
+      row("rad", "fill-arable", "Arable land (% national)", state.fill === "arable", "fillgrp"),
       row("rad", "fill-role", "Agent / pivot", state.fill === "role", "fillgrp"),
       row("rad", "fill-power", "Computed power (data)", state.fill === "power", "fillgrp"),
       row("rad", "fill-freexp", "Freedom of expression (V-Dem)", state.fill === "freexp", "fillgrp"),
@@ -1744,11 +1804,21 @@
 
       sec("theory", "Classical theory",
         theoryRow("islandchains", "Island Chains (1st-3rd)", "#5BC8FF") +
-        theoryRow("heartland", "Mackinder Heartland (approx.)", "#E8A33D") +
+        theoryRow("heartland", "Mackinder Heartland (1943, approx.)", "#E8A33D") +
         theoryRow("deltas", "River deltas (Marshall)", "#49C5B6") +
         theoryRow("shatter", "Shatterbelts (Cohen)", "#C44569") +
         theoryRow("rimland", "Spykman Rimland + offshore", "#C8B08A") +
-        theoryRow("pearls", "String of Pearls", "#E8E6DF"), null, false) +
+        theoryRow("pearls", "String of Pearls", "#E8E6DF") +
+        sub("Haushofer / World-Island") +
+        theoryRow("worldisland", "World-Island (Map 34: belt + monsoon)", "#E8A33D") +
+        theoryRow("panregions", "Pan-regions (4 meridional blocs)", "#B57EDC"),
+        "The two Haushofer layers stack with each other and with the Heartland/Rimland above.", false) +
+
+      sec("agriculture", "Agriculture",
+        row("chk", "cropland", "Arable / cropland extent", state.cropland, null, "#6FB36F") +
+        row("chk", "wheat", "Wheat belts", state.wheat, null, "#E8C45A") +
+        row("chk", "rice", "Rice regions", state.rice, null, "#4FC3A1"),
+        "Approximate sub-national growing regions (FAO / agronomic geography), stackable. For a national arable-land choropleth, see Country fills.", false) +
 
       sec("resources", "Natural resources",
         resourceRows +
@@ -1767,7 +1837,8 @@
       state.fill = "none"; state.stat = "none"; state.statMode = "ring";
       ["hillshade","heat","heartland","rimland","nuclear","chokepoints",
        "newspulse","lanes","portwatch","bri","allymode","advmode","basesmode","islandchains","pearls","shatter","radar","clouds","deltas","terrain3d",
-       "pipelines","flowarcs","chokestress","caspian"].forEach(function (k) { state[k] = false; });
+       "pipelines","flowarcs","chokestress","caspian",
+       "worldisland","panregions","cropland","wheat","rice"].forEach(function (k) { state[k] = false; });
       BLOCS.forEach(function (b) { state[b.key] = false; });
   (window.RESOURCE_TYPES || []).forEach(function (t) { state["res" + t[0]] = false; });
       applyFill(); switchStat("none");
@@ -1782,7 +1853,12 @@
        ["newspulse",["newspulse"]],["lanes",["lanes-core"]],
        ["portwatch",["portwatch-ring","portwatch-label"]],["bri",["bri-solid","bri-dash","bri-poi","bri-poi-label"]],
        ["pipelines",["pipelines-line","pipelines-label"]],
-       ["flowarcs",["flow-arcs-line","flow-arcs-label","flow-arcs-arrow"]]
+       ["flowarcs",["flow-arcs-line","flow-arcs-label","flow-arcs-arrow"]],
+       ["worldisland",["hf-desert-fill","hf-desert-line","hf-monsoon-fill","hf-boundary-line"]],
+       ["panregions",["hf-pan-fill","hf-pan-line","hf-pan-label"]],
+       ["cropland",["cropland-fill","cropland-line"]],
+       ["wheat",["wheat-fill","wheat-line"]],
+       ["rice",["rice-fill","rice-line"]]
       ].forEach(function (t) { t[1].forEach(function (id) { setVis(id, false); }); });
       setChokepointGaugesVisible(false);
       setCaspianVisible(false);
@@ -1835,7 +1911,7 @@
       tele();
     };
     byId("cb-hillshade").onchange = function (e) { state.hillshade = e.target.checked; setVis("hillshade", state.hillshade); tele(); };
-    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "religion", "conflict", "trader", "vdem", "freexp", "usbases", "oil"].forEach(function (v) {
+    ["none", "tier", "role", "power", "renew", "milex", "gini", "trade", "arable", "religion", "conflict", "trader", "vdem", "freexp", "usbases", "oil"].forEach(function (v) {
       byId("cb-fill-" + v).onchange = function (e) { if (e.target.checked) { state.fill = v; applyFill(); updateLegend(); refreshCard(); tele(); } };
     });
     // The Security and Economy subsections each carry their own "None" radio
@@ -1904,6 +1980,23 @@
       state.deltas = e.target.checked;
       setVis("deltas-fill", state.deltas); setVis("deltas-label", state.deltas); tele();
     };
+    byId("cb-worldisland").onchange = function (e) {
+      state.worldisland = e.target.checked;
+      ["hf-desert-fill","hf-desert-line","hf-monsoon-fill","hf-boundary-line"]
+        .forEach(function (id) { setVis(id, state.worldisland); });
+      tele();
+    };
+    byId("cb-panregions").onchange = function (e) {
+      state.panregions = e.target.checked;
+      ["hf-pan-fill","hf-pan-line","hf-pan-label"].forEach(function (id) { setVis(id, state.panregions); });
+      tele();
+    };
+    ["cropland", "wheat", "rice"].forEach(function (k) {
+      byId("cb-" + k).onchange = function (e) {
+        state[k] = e.target.checked;
+        setVis(k + "-fill", state[k]); setVis(k + "-line", state[k]); tele();
+      };
+    });
     byId("cb-lanes").onchange = function (e) {
       state.lanes = e.target.checked;
       setVis("lanes-core", state.lanes); tele();
@@ -1962,7 +2055,7 @@
   }
 
   function fillVintage() {
-    var wb = ["power", "renew", "milex", "gini", "trade"];
+    var wb = ["power", "renew", "milex", "gini", "trade", "arable"];
     if (wb.indexOf(state.fill) >= 0 || state.stat !== "none") {
       if (CUR_YEAR >= 2026) {
         var m = POWER_BY_NAME && POWER_BY_NAME._meta;
@@ -1997,6 +2090,8 @@
       ? [["Equal 25", "#4E88A6"], ["40", "#E8843D"], ["Unequal 55", "#E84393"]]
       : state.fill === "trade"
       ? [["Deficit", "#E84393"], ["0", "#3B5266"], ["Surplus", "#3FE08A"]]
+      : state.fill === "arable"
+      ? [["0%", "#23331F"], ["25%", "#6E8F38"], ["60%+", "#E4E86A"]]
       : state.fill === "vdem"
       ? [["0", "#8E2F4F"], ["50", "#C9A227"], ["100", "#3FE08A"]]
       : state.fill === "freexp"

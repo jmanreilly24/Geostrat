@@ -5,11 +5,11 @@
    ========================================================================== */
 window.THEORY_META = {
   heartland: {
-    name: "Mackinder Heartland",
-    year: 1904,
+    name: "Mackinder Heartland (1943 revision)",
+    year: 1943,
     theorist: "Halford J. Mackinder",
     school: "Classical geopolitics",
-    desc: "Eurasia's pivot area: whoever controls the inner-Asian core controls the World-Island, and therefore the world."
+    desc: "Eurasia's pivot area. In his 1943 revision Mackinder pulled the eastern boundary back to the Yenisei River, dropped the Central Siberian uplands, and located Soviet power west of the Urals, conceding the rimland's predominance and urging British-Soviet-US collaboration."
   },
   rimland: {
     name: "Spykman Rimland",
@@ -45,5 +45,19 @@ window.THEORY_META = {
     theorist: "Tim Marshall (popular synthesis)",
     school: "Popular geopolitics / environmental security",
     desc: "Productive, populous river deltas as strategic terrain: food, freshwater, and chokepoints for major navigable basins."
+  },
+  worldisland: {
+    name: "World-Island (after Map 34)",
+    year: 1924,
+    theorist: "Karl Haushofer (rendering Mackinder)",
+    school: "German Geopolitik",
+    desc: "The Forschungsinstitut fuer Kulturmorphologie rendering of Mackinder's World-Island: the Afro-Eurasian landmass ringed by its boundary, split by the arid desert & steppe belt (Sahara-Arabia-Central Asia-Gobi) and edged by the densely populated monsoon coastlands of the inner crescent."
+  },
+  panregions: {
+    name: "Pan-regions",
+    year: 1931,
+    theorist: "Karl Haushofer",
+    school: "German Geopolitik",
+    desc: "Haushofer's vision of the world carved into four self-sufficient, north-south meridional blocs each led by a core power: Pan-America (US), Eurafrica (Germany), Pan-Russia (USSR), and Pan-Asia/Pan-Pacific (Japan). Schematic."
   }
 };
