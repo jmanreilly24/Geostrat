@@ -51,12 +51,17 @@
      tradeoff is no basemap texture or hillshade detail in light mode. */
   var THEMES = {
     dark: {
+      // `space` is the globe's own surface (the ocean). `void` is the area
+      // around the sphere in globe projection — a separate colour, or the
+      // globe loses its edge and reads as a flat blob.
+      voidBg: "#0B1020", voidHorizon: "#1A2740", atmosphere: 0.55,
       space: "#0B1020", landBase: "#131C30", coast: "#2b3a55", borders: "#2b3a55",
       halo: "#0B1020", label: "#E8E6DF", labelDim: "#A8B2C4",
       labelWarm: "#E8C98A", labelTeal: "#6FE3D4", labelGreen: "#3FE08A",
       nodata: "#222C3B", raster: "visible", landBaseOpacity: 0
     },
     light: {
+      voidBg: "#DCD5C4", voidHorizon: "#E8E2D4", atmosphere: 0.3,
       space: "#D8E5D3", landBase: "#FAF6EC", coast: "#9A8F7A", borders: "#B9AE96",
       halo: "#FAF6EC", label: "#332C20", labelDim: "#6B6252",
       labelWarm: "#7A5A0E", labelTeal: "#1A5E52", labelGreen: "#2E6B2C",
@@ -93,6 +98,19 @@
      ~100 hardcoded colours downstream don't each need hand-editing. */
   var THEMED_PAINT = [];
   function themed(layer, prop, key) { THEMED_PAINT.push([layer, prop, key]); }
+
+  /* Sky/atmosphere around the globe. In globe projection this paints the space
+     outside the sphere, so it has to move with the theme or the void and the
+     ocean end up the same colour and the globe loses its silhouette. */
+  function skyFor(name) {
+    var t = THEMES[name] || THEMES.dark;
+    return {
+      "sky-color": t.voidBg,
+      "horizon-color": t.voidHorizon,
+      "fog-color": t.voidBg,
+      "atmosphere-blend": t.atmosphere
+    };
+  }
 
   /* Score-band fill expression for a 0-100 property. `step` not `interpolate`:
      the bands are discrete and must not blend into each other. */
@@ -211,7 +229,7 @@
     version: 8,
     glyphs: "https://fonts.openmaptiles.org/{fontstack}/{range}.pbf",
     projection: { type: "globe" },
-    sky: { "atmosphere-blend": 0.55 },
+    sky: skyFor(THEME_NAME),
     sources: {
       base: {
         type: "raster",
@@ -314,6 +332,10 @@
     if (map.getLayer("space")) {
       map.setPaintProperty("space", "background-color", TH("space"));
     }
+    // setSky is MapLibre v5+; if it's unavailable the CSS #map background still
+    // carries the void colour, so this degrades to a slightly flatter globe
+    // rather than breaking the theme.
+    try { if (map.setSky) map.setSky(skyFor(THEME_NAME)); } catch (e) {}
     if (map.getLayer("base")) {
       map.setLayoutProperty("base", "visibility", TH("raster"));
     }

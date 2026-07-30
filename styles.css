@@ -36,7 +36,9 @@
    so in light mode it holds the dark ink rather than the pale paper.
    --------------------------------------------------------------------------- */
 :root[data-theme="light"] {
-  --ink:        #D8E5D3;
+  /* the void around the globe, not the ocean — the ocean is the map's own
+     background layer, set in app.js THEMES.light.space */
+  --ink:        #DCD5C4;
   --panel:      rgba(255, 253, 248, 0.94);
   --panel-solid:#FFFDF8;
   --hairline:   #E3DCCB;
