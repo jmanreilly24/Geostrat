@@ -37,8 +37,11 @@ SOURCES = [
     ("libdem",    "https://ourworldindata.org/grapher/liberal-democracy-index.csv",       "liberal democracy",       100),
     ("polyarchy", "https://ourworldindata.org/grapher/electoral-democracy-index.csv",     "electoral democracy",     100),
     ("partipdem", "https://ourworldindata.org/grapher/participatory-democracy-index.csv", "participatory democracy", 100),
-    ("delibdem",  "https://ourworldindata.org/grapher/deliberative-democracy-index.csv",  "deliberative democracy",  100),
-    ("egaldem",   "https://ourworldindata.org/grapher/egalitarian-democracy-index.csv",   "egalitarian democracy",   100),
+    # NOTE: these two carry a "-vdem" suffix while the three above do not.
+    # OWID is inconsistent here; the unsuffixed slugs return an empty body
+    # rather than a 404, which reads as "empty CSV" instead of a failed fetch.
+    ("delibdem",  "https://ourworldindata.org/grapher/deliberative-democracy-index-vdem.csv", "deliberative democracy", 100),
+    ("egaldem",   "https://ourworldindata.org/grapher/egalitarian-democracy-index-vdem.csv",  "egalitarian democracy",  100),
     ("freexp",    "https://ourworldindata.org/grapher/freedom-of-expression-index.csv",   "expression",              100),
     ("regime",    "https://ourworldindata.org/grapher/political-regime.csv",              "regime",                    1),
 ]
@@ -78,7 +81,9 @@ def fetch_metric(url, score_substr, scale=100):
     # match the score column by substring so OWID column renames don't break us.
     # Entity/Code/Year are never the score; excluding them lets the generic
     # fallbacks ("index", "vdem") run without ever binding to a key column.
-    SKIP = {"entity", "code", "year"}
+    # Entity/Code/Year are never the score. Some OWID exports also carry a
+    # region column, which must not be matchable by the generic fallbacks.
+    SKIP = {"entity", "code", "year", "world region according to owid"}
     candidates = [i for i, h in enumerate(header) if (h or "").lower() not in SKIP]
 
     i_val = -1
