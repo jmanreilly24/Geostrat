@@ -359,7 +359,6 @@
         decorate(geo);
         addLayers(geo);
         autoRegisterThemedPaint();
-        applyTheme(THEME_NAME);
         refreshConflict();
         refreshPower();
         refreshNewspulse();
@@ -369,6 +368,9 @@
           .then(function (d) { VDEM = d; clearRankCache(); applyYear(); refreshIndexPanels(); })
           .catch(function () {});
         buildRail();
+        // must follow buildRail: applyTheme repaints the legend, and #legend
+        // is part of the rail markup
+        applyTheme(THEME_NAME);
         wireInteraction();
         restoreIndexPanels();
         byId("overlay").classList.add("hide");
@@ -2285,6 +2287,10 @@
   }
   function updateLegend() {
     var el = byId("legend");
+    // #legend is created by buildRail(), so this can legitimately be called
+    // before it exists (theme init, early applyYear). Bail rather than throw —
+    // an unguarded null here takes down whatever promise chain called it.
+    if (!el) { updateStatLegend(); return; }
     var items = state.fill === "tier"
       ? [["Hegemon", TIER_COLOR.hegemon], ["Great", TIER_COLOR.great], ["Regional", TIER_COLOR.regional],
          ["Middle", TIER_COLOR.middle], ["Small", TIER_COLOR.small], ["Unclassified", TIER_COLOR.unclassified]]
