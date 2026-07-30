@@ -1,4 +1,4 @@
-name: Update V-Dem libdem
+name: Update V-Dem core indices
 on:
   schedule:
     - cron: "0 8 1 * *"

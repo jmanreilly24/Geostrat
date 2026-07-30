@@ -40,18 +40,23 @@
     <span class="yearctl">YEAR <input id="t-year" type="range" min="2000" max="2026" step="1" value="2026"> <b id="t-yearv">LIVE</b></span>
     <span class="spin" id="t-spin" role="button" tabindex="0">SPIN ▷</span>
     <span class="spin" id="t-proj" role="button" tabindex="0">FLAT ▭</span>
+    <span class="spin" id="t-theme" role="button" tabindex="0" aria-label="Toggle light and dark theme">LIGHT ☀</span>
   </div>
 
   <!-- Country info card -->
   <div class="card" id="card">
     <button class="close" id="card-close" aria-label="Close">✕</button>
     <p class="name" id="card-name">—</p>
+    <div id="card-regime"></div>
     <p class="field">Power tier</p>
     <p class="value" id="card-tier">—</p>
     <p class="field">Strategic role</p>
     <p class="value" id="card-role">—</p>
     <p class="field">Blocs</p>
     <div class="chips" id="card-blocs"></div>
+    <p class="field" id="card-vdem-field">V-Dem core indices <span class="vd-rankhead">score · rank</span></p>
+    <div id="card-vdem"></div>
+    <p class="vd-note" id="card-vdem-note"></p>
     <p class="field">Weather now</p>
     <div class="value" id="card-wx" style="font-size:13px">&mdash;</div>
     <p class="field">Conflicts</p>

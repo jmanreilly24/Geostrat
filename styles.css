@@ -16,6 +16,45 @@
   --signal-dim: #9c7330;
   --teal:       #4BB3A0;
   --radius:     10px;
+  --shadow-lg:  0 18px 50px rgba(0,0,0,0.5);
+  --shadow-md:  0 14px 30px rgba(0,0,0,0.55);
+  --shadow-sm:  0 8px 24px rgba(0,0,0,0.4);
+  --vignette:   inset 0 0 220px 40px rgba(0,0,0,0.55);
+  --masthead-shadow: 0 2px 18px rgba(0,0,0,0.7);
+  --row-hover:  rgba(232,163,61,0.08);
+  --badge-bg:   rgba(232,163,61,0.16);
+  --badge-fg:   #F0C98A;
+  --track:      #24304A;
+  --idx-head-bg: rgba(255,255,255,0.04);
+}
+
+/* ---------------------------------------------------------------------------
+   VELLUM — light theme. Cream land, celadon sea, bronze chrome.
+   Applied by app.js setting data-theme="light" on <html>; the map's own
+   colours are handled separately by the THEMES table in app.js.
+   --parchment keeps its name but flips role: it is the body text colour,
+   so in light mode it holds the dark ink rather than the pale paper.
+   --------------------------------------------------------------------------- */
+:root[data-theme="light"] {
+  --ink:        #D8E5D3;
+  --panel:      rgba(255, 253, 248, 0.94);
+  --panel-solid:#FFFDF8;
+  --hairline:   #E3DCCB;
+  --parchment:  #332C20;
+  --muted:      #8A8172;
+  --signal:     #8A6A0E;
+  --signal-dim: #B9A76A;
+  --teal:       #1A5E52;
+  --shadow-lg:  0 14px 34px rgba(90, 78, 50, 0.16);
+  --shadow-md:  0 10px 22px rgba(90, 78, 50, 0.14);
+  --shadow-sm:  0 6px 16px rgba(90, 78, 50, 0.12);
+  --vignette:   none;
+  --masthead-shadow: none;
+  --row-hover:  rgba(138, 106, 14, 0.09);
+  --badge-bg:   #F0E4BE;
+  --badge-fg:   #5C4708;
+  --track:      #EDE6D6;
+  --idx-head-bg: #F5F0E2;
 }
 
 * { box-sizing: border-box; }
@@ -31,7 +70,7 @@ html, body {
 /* canvas atmosphere — a faint vignette so the globe sits in space */
 #map::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  box-shadow: inset 0 0 220px 40px rgba(0,0,0,0.55);
+  box-shadow: var(--vignette);
 }
 
 /* ---- Masthead ----------------------------------------------------------- */
@@ -44,7 +83,7 @@ html, body {
 }
 .masthead h1 {
   font-size: 21px; font-weight: 600; letter-spacing: 0.01em; margin: 0;
-  text-shadow: 0 2px 18px rgba(0,0,0,0.7);
+  text-shadow: var(--masthead-shadow);
 }
 
 /* ---- Rail toggle button -------------------------------------------------- */
@@ -53,7 +92,7 @@ html, body {
   width: 42px; height: 42px; border-radius: 50%; cursor: pointer;
   background: var(--panel); backdrop-filter: blur(10px);
   border: 1px solid var(--hairline); color: var(--signal); font-size: 17px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4); transition: all 140ms ease;
+  box-shadow: var(--shadow-sm); transition: all 140ms ease;
 }
 .rail-toggle:hover { border-color: var(--signal); }
 .rail.hidden { transform: translateX(112%); opacity: 0; pointer-events: none; }
@@ -66,7 +105,7 @@ html, body {
   background: var(--panel); backdrop-filter: blur(14px);
   border: 1px solid var(--hairline); border-radius: var(--radius);
   padding: 14px 14px 16px;
-  box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-lg);
 }
 .rail::-webkit-scrollbar { width: 8px; }
 .rail::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: 8px; }
@@ -110,7 +149,7 @@ html, body {
   cursor: pointer; user-select: none; font-size: 13.5px; line-height: 1.2;
   transition: background 120ms ease;
 }
-.row:hover { background: rgba(232,163,61,0.08); }
+.row:hover { background: var(--row-hover); }
 .row input { position: absolute; opacity: 0; pointer-events: none; }
 .row .box {
   width: 15px; height: 15px; flex: 0 0 auto; border: 1.5px solid var(--hairline);
@@ -151,7 +190,7 @@ html, body {
   position: absolute; right: 4px; top: calc(100% + 4px);
   z-index: 8; max-width: 240px; min-width: 200px;
   background: var(--panel-solid); border: 1px solid var(--hairline);
-  border-radius: 8px; padding: 8px 10px; box-shadow: 0 14px 30px rgba(0,0,0,0.55);
+  border-radius: 8px; padding: 8px 10px; box-shadow: var(--shadow-md);
   font-size: 11.5px; line-height: 1.45; color: var(--parchment);
   display: none; pointer-events: none;
 }
@@ -202,7 +241,10 @@ html, body {
   border: 1px solid var(--hairline); border-radius: var(--radius);
   padding: 14px 16px; transform: translateY(14px); opacity: 0; pointer-events: none;
   transition: opacity 160ms ease, transform 160ms ease;
-  box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-lg);
+  /* the V-Dem block adds a regime badge, five bars and a footnote, so the card
+     can now outgrow the viewport on short screens — scroll rather than clip */
+  max-height: calc(100vh - 140px); overflow-y: auto; overscroll-behavior: contain;
 }
 .card.show { transform: translateY(0); opacity: 1; pointer-events: auto; }
 .card .close {
@@ -231,6 +273,74 @@ html, body {
   font-family: "IBM Plex Mono", monospace; font-size: 11px; padding: 2px 8px;
   border-radius: 999px; border: 1px solid var(--hairline); color: var(--parchment);
 }
+
+/* ---- V-Dem block in the country dossier --------------------------------- */
+.regime-badge {
+  display: inline-block; margin: 2px 0 8px;
+  font-family: "IBM Plex Mono", monospace; font-size: 11px;
+  padding: 3px 8px; border-radius: 3px;
+  background: var(--badge-bg); color: var(--badge-fg);
+}
+.card .field .vd-rankhead {
+  float: right; font-size: 9.5px; letter-spacing: 0.08em; opacity: 0.75;
+}
+.vd-row { margin-bottom: 8px; }
+.vd-top {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 11.5px; color: var(--muted); margin-bottom: 3px; gap: 8px;
+}
+.vd-top b { color: var(--parchment); font-family: "IBM Plex Mono", monospace; }
+.vd-rank { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 10.5px; }
+.vd-track {
+  height: 6px; border-radius: 3px; background: var(--track); overflow: hidden;
+}
+.vd-track i { display: block; height: 6px; border-radius: 3px; }
+.vd-nodata { color: var(--muted); font-family: "IBM Plex Mono", monospace; }
+.vd-nodata-all, .vd-note {
+  font-size: 10.5px; color: var(--muted); line-height: 1.5; margin: 4px 0 0;
+}
+.vd-note { margin-bottom: 2px; }
+
+/* ---- Floating index ranking panels -------------------------------------- */
+.idx-panel {
+  position: absolute; z-index: 8; width: 236px;
+  background: var(--panel); backdrop-filter: blur(12px);
+  border: 1px solid var(--hairline); border-radius: 8px;
+  box-shadow: var(--shadow-md); overflow: hidden;
+  display: flex; flex-direction: column; max-height: 60vh;
+}
+.idx-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 7px 9px; border-bottom: 1px solid var(--hairline);
+  background: var(--idx-head-bg);
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.idx-head.grabbing { cursor: grabbing; }
+.idx-title {
+  font-size: 11.5px; font-weight: 500; color: var(--parchment);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.idx-close {
+  background: none; border: 0; color: var(--muted); cursor: pointer;
+  font-size: 13px; line-height: 1; padding: 0 2px;
+}
+.idx-close:hover { color: var(--signal); }
+.idx-body { overflow-y: auto; overscroll-behavior: contain; }
+.idx-row {
+  display: flex; align-items: baseline; gap: 6px; padding: 4px 9px;
+  font-size: 11px; cursor: pointer; border-left: 3px solid transparent;
+}
+.idx-row:hover { background: var(--row-hover); }
+.idx-row.active { background: var(--badge-bg); border-left-color: var(--signal); }
+.idx-rank {
+  font-family: "IBM Plex Mono", monospace; color: var(--muted);
+  min-width: 26px; text-align: right; flex: none; font-size: 10.5px;
+}
+.idx-name {
+  color: var(--parchment); flex: 1; min-width: 0; line-height: 1.3;
+}
+.idx-score { font-family: "IBM Plex Mono", monospace; flex: none; font-weight: 500; }
+.idx-empty { padding: 10px 9px; font-size: 11px; color: var(--muted); line-height: 1.5; }
 
 /* ---- Loading / error overlay ------------------------------------------- */
 .overlay {

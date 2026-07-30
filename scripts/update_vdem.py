@@ -1,16 +1,27 @@
 #!/usr/bin/env python3
 """
-Fetch two V-Dem metrics (via Our World in Data's maintained CSVs, CC BY) for
-2016..latest and write data/vdem.json with both indices keyed by year:
+Fetch the V-Dem core indices (via Our World in Data's maintained CSVs, CC BY)
+for 2016..latest and write data/vdem.json keyed by metric, then year:
 
   {
-    "libdem": { "2016": { "United States": 81, ... }, ... },   # liberal democracy
-    "freexp": { "2016": { "United States": 88, ... }, ... }    # freedom of expression
+    "libdem":    { "2016": { "United States": 81, ... }, ... },  # liberal democracy
+    "polyarchy": { "2016": { "United States": 86, ... }, ... },  # electoral democracy
+    "partipdem": { ... },                                        # participatory
+    "delibdem":  { ... },                                        # deliberative
+    "egaldem":   { ... },                                        # egalitarian
+    "freexp":    { ... },                                        # freedom of expression
+    "regime":    { "2016": { "United States": 3, ... }, ... }    # regimes of the world
   }
 
-Scores are rescaled from 0-1 to 0-100. Updates automatically when OWID/V-Dem
-release new years. Fails safe: if a fetch breaks, the previous file is left
-untouched and the other metric's update still happens.
+Index scores are rescaled from 0-1 to 0-100 (they are interval scales, NOT
+percentages or percentiles - the x100 is a rendering convenience only).
+
+"regime" is categorical and passes through unscaled:
+  0 closed autocracy · 1 electoral autocracy
+  2 electoral democracy · 3 liberal democracy
+
+Updates automatically when OWID/V-Dem release new years. Fails safe: if a fetch
+breaks, the previous file is left untouched and every other metric still updates.
 """
 
 import csv, io, json, os, sys, urllib.request
@@ -18,17 +29,34 @@ import csv, io, json, os, sys, urllib.request
 sys.path.insert(0, os.path.dirname(__file__))
 from update_power import NAME_BY_ISO3
 
+# (key, url, score-column substring, scale factor)
+# The substring is matched against the CSV header to survive OWID column
+# renames. Four of these files use a column containing "democracy", but each
+# CSV has only one score column, so the match stays unambiguous within a file.
 SOURCES = [
-    ("libdem", "https://ourworldindata.org/grapher/liberal-democracy-index.csv", "democracy"),
-    ("freexp", "https://ourworldindata.org/grapher/freedom-of-expression-index.csv", "expression"),
+    ("libdem",    "https://ourworldindata.org/grapher/liberal-democracy-index.csv",       "liberal democracy",       100),
+    ("polyarchy", "https://ourworldindata.org/grapher/electoral-democracy-index.csv",     "electoral democracy",     100),
+    ("partipdem", "https://ourworldindata.org/grapher/participatory-democracy-index.csv", "participatory democracy", 100),
+    ("delibdem",  "https://ourworldindata.org/grapher/deliberative-democracy-index.csv",  "deliberative democracy",  100),
+    ("egaldem",   "https://ourworldindata.org/grapher/egalitarian-democracy-index.csv",   "egalitarian democracy",   100),
+    ("freexp",    "https://ourworldindata.org/grapher/freedom-of-expression-index.csv",   "expression",              100),
+    ("regime",    "https://ourworldindata.org/grapher/political-regime.csv",              "regime",                    1),
 ]
+
+# Fallback substrings, tried in order if the primary substring misses. OWID has
+# renamed these columns before (e.g. "Liberal democracy index" -> "libdem_vdem_owid").
+FALLBACK_SUBSTRS = ["democracy", "index", "vdem"]
 OUT = os.path.join(os.path.dirname(__file__), "..", "data", "vdem.json")
 UA = {"User-Agent": "geostrat-map/1.0 (GitHub Action)"}
 FROM_YEAR = 2016
 
 
-def fetch_metric(url, score_substr):
-    """Returns { year_str: { country_name: score_0_100 } } or None on failure."""
+def fetch_metric(url, score_substr, scale=100):
+    """Returns { year_str: { country_name: value } } or None on failure.
+
+    scale=100 rescales a 0-1 index to 0-100 and rounds to 1dp.
+    scale=1 passes a categorical code straight through as an int.
+    """
     try:
         req = urllib.request.Request(url, headers=UA)
         with urllib.request.urlopen(req, timeout=120) as r:
@@ -47,13 +75,26 @@ def fetch_metric(url, score_substr):
     except ValueError:
         print("unexpected header:", header)
         return None
-    # match the score column by substring so OWID column renames don't break us
-    i_val = next((i for i, h in enumerate(header)
-                  if score_substr in (h or "").lower()), -1)
+    # match the score column by substring so OWID column renames don't break us.
+    # Entity/Code/Year are never the score; excluding them lets the generic
+    # fallbacks ("index", "vdem") run without ever binding to a key column.
+    SKIP = {"entity", "code", "year"}
+    candidates = [i for i, h in enumerate(header) if (h or "").lower() not in SKIP]
+
+    i_val = -1
+    for substr in [score_substr] + FALLBACK_SUBSTRS:
+        i_val = next((i for i in candidates
+                      if substr in (header[i] or "").lower()), -1)
+        if i_val >= 0:
+            break
+    # last resort: exactly one non-key column means it can only be the score
+    if i_val < 0 and len(candidates) == 1:
+        i_val = candidates[0]
+
     if i_val < 0:
         print("could not locate score column (looking for", repr(score_substr), ") in:", header)
         return None
-    print("using column", i_val, "as score:", header[i_val], "from", url)
+    print("using column", i_val, "as score:", repr(header[i_val]), "from", url)
 
     out = {}
     for row in rows[1:]:
@@ -68,7 +109,9 @@ def fetch_metric(url, score_substr):
             continue
         if y < FROM_YEAR:
             continue
-        out.setdefault(str(y), {})[NAME_BY_ISO3[code]] = round(v * 100, 1)
+        out.setdefault(str(y), {})[NAME_BY_ISO3[code]] = (
+            round(v * scale, 1) if scale != 1 else int(v)
+        )
     return out
 
 
@@ -90,8 +133,8 @@ def main():
             print("could not read existing vdem.json, starting fresh:", e)
 
     any_new = False
-    for key, url, substr in SOURCES:
-        data = fetch_metric(url, substr)
+    for key, url, substr, scale in SOURCES:
+        data = fetch_metric(url, substr, scale)
         if data:
             bundle[key] = data
             any_new = True

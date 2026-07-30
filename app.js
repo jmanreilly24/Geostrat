@@ -39,6 +39,70 @@
     { key: "oas", label: "OAS", color: "#E8836F", group: "eco" }
   ];
 
+  /* ---- theming ----------------------------------------------------------
+     Two themes. "dark" is the original situation-room palette. "light" is
+     Vellum: cream land, celadon sea, bronze chrome. Only the properties that
+     genuinely have to invert are themed - saturated data colours (bloc
+     outlines, pipelines, theory zones) read acceptably on both grounds.
+
+     Light mode hides the CARTO raster basemap entirely and draws land as a
+     flat cream fill from the countries source, with a hairline coastline.
+     That gives exact palette control instead of tinting raster tiles - the
+     tradeoff is no basemap texture or hillshade detail in light mode. */
+  var THEMES = {
+    dark: {
+      space: "#0B1020", landBase: "#131C30", coast: "#2b3a55", borders: "#2b3a55",
+      halo: "#0B1020", label: "#E8E6DF", labelDim: "#A8B2C4",
+      labelWarm: "#E8C98A", labelTeal: "#6FE3D4", labelGreen: "#3FE08A",
+      nodata: "#222C3B", raster: "visible", landBaseOpacity: 0
+    },
+    light: {
+      space: "#D8E5D3", landBase: "#FAF6EC", coast: "#9A8F7A", borders: "#B9AE96",
+      halo: "#FAF6EC", label: "#332C20", labelDim: "#6B6252",
+      labelWarm: "#7A5A0E", labelTeal: "#1A5E52", labelGreen: "#2E6B2C",
+      nodata: "#E0DACC", raster: "none", landBaseOpacity: 1
+    }
+  };
+
+  /* Score bands - identical in both themes so the map and the country dossier
+     always speak the same language. Absolute thresholds on a 0-100 scale.
+     V-Dem indices are 0-1 interval scales rendered x100: not percentages,
+     not percentiles. */
+  var BANDS = [
+    { max: 20, color: "#A8342E", label: "0–20" },
+    { max: 40, color: "#C0701A", label: "20–40" },
+    { max: 60, color: "#BFA318", label: "40–60" },
+    { max: 80, color: "#2E6B2C", label: "60–80" },
+    { max: Infinity, color: "#2A6497", label: "80–100" }
+  ];
+  function bandColor(v) {
+    if (v == null || v < 0) return null;          // no data - never a red bar
+    for (var i = 0; i < BANDS.length; i++) if (v < BANDS[i].max) return BANDS[i].color;
+    return BANDS[BANDS.length - 1].color;
+  }
+
+  var THEME_NAME = "dark";
+  try {
+    var saved = localStorage.getItem("geostrat:theme");
+    if (saved === "light" || saved === "dark") THEME_NAME = saved;
+  } catch (e) { /* private browsing - fall back to dark */ }
+  function TH(k) { return THEMES[THEME_NAME][k]; }
+
+  /* Registry of paint properties that follow the theme: [layerId, prop, key].
+     Most entries are auto-registered by matching known dark literals, so the
+     ~100 hardcoded colours downstream don't each need hand-editing. */
+  var THEMED_PAINT = [];
+  function themed(layer, prop, key) { THEMED_PAINT.push([layer, prop, key]); }
+
+  /* Score-band fill expression for a 0-100 property. `step` not `interpolate`:
+     the bands are discrete and must not blend into each other. */
+  function bandFill(prop) {
+    var e = ["step", ["get", prop], TH("nodata"), 0, BANDS[0].color];
+    for (var i = 0; i < BANDS.length - 1; i++) e.push(BANDS[i].max, BANDS[i + 1].color);
+    return e;
+  }
+  var BAND_FILL_LAYERS = { "fill-vdem": "vdem", "fill-freexp": "freexp" };
+
   var byId = function (id) { return document.getElementById(id); };
 
   var COUNTRIES_GEO = null;   // decorated polygons, kept so live data can update them
@@ -167,8 +231,9 @@
       }
     },
     layers: [
-      { id: "space", type: "background", paint: { "background-color": "#0B1020" } },
-      { id: "base", type: "raster", source: "base" },
+      { id: "space", type: "background", paint: { "background-color": THEMES[THEME_NAME].space } },
+      { id: "base", type: "raster", source: "base",
+        layout: { visibility: THEMES[THEME_NAME].raster } },
       { id: "hillshade", type: "hillshade", source: "dem", paint: {
           "hillshade-exaggeration": 0.45,
           "hillshade-shadow-color": "#05070d",
@@ -210,6 +275,74 @@
     byId("overlay-msg").innerHTML = msg;
   }
 
+  /* Walk the built style once and register every paint property whose value is
+     a known dark-theme literal. This is why ~100 hardcoded colours downstream
+     didn't each need hand-editing: near-white labels, ink halos and pale lines
+     are the only ones that actually break on cream, and they're identifiable
+     by value. Expression-valued paints (arrays) are skipped deliberately —
+     those are saturated data colours that read on both grounds. */
+  function autoRegisterThemedPaint() {
+    var VALUE_KEY = {
+      "#0B1020": "halo",
+      "#E8E6DF": "label",
+      "#A8B2C4": "labelDim",
+      "#E8C98A": "labelWarm",
+      "#FFE6B8": "labelWarm",
+      "#FFE2A8": "labelWarm",
+      "#6FE3D4": "labelTeal",
+      "#7FE3D6": "labelTeal",
+      "#3FE08A": "labelGreen"
+    };
+    var PROPS = ["text-halo-color", "text-color", "icon-halo-color",
+                 "line-color", "circle-color"];
+    var layers;
+    try { layers = map.getStyle().layers || []; } catch (e) { return; }
+    layers.forEach(function (L) {
+      var p = L.paint || {};
+      PROPS.forEach(function (prop) {
+        var v = p[prop];
+        if (typeof v === "string" && VALUE_KEY[v]) themed(L.id, prop, VALUE_KEY[v]);
+      });
+    });
+  }
+
+  function applyTheme(name) {
+    THEME_NAME = THEMES[name] ? name : "dark";
+    document.documentElement.setAttribute("data-theme", THEME_NAME);
+    try { localStorage.setItem("geostrat:theme", THEME_NAME); } catch (e) {}
+
+    if (map.getLayer("space")) {
+      map.setPaintProperty("space", "background-color", TH("space"));
+    }
+    if (map.getLayer("base")) {
+      map.setLayoutProperty("base", "visibility", TH("raster"));
+    }
+    // hillshade is raster-derived terrain shading; it only makes sense over
+    // the dark basemap, and reads as dirt on cream.
+    if (map.getLayer("hillshade")) {
+      map.setLayoutProperty("hillshade", "visibility",
+        (THEME_NAME === "dark" && state.hillshade) ? "visible" : "none");
+    }
+
+    THEMED_PAINT.forEach(function (entry) {
+      if (!map.getLayer(entry[0])) return;
+      try { map.setPaintProperty(entry[0], entry[1], TH(entry[2])); } catch (e) {}
+    });
+
+    // score-band fills carry the themed no-data colour inside their expression,
+    // so they need the whole expression rebuilt rather than a single stop.
+    Object.keys(BAND_FILL_LAYERS).forEach(function (id) {
+      if (!map.getLayer(id)) return;
+      try { map.setPaintProperty(id, "fill-color", bandFill(BAND_FILL_LAYERS[id])); } catch (e) {}
+    });
+
+    var btn = byId("t-theme");
+    if (btn) btn.innerHTML = THEME_NAME === "dark" ? "LIGHT ☀" : "DARK ☾";
+    if (typeof updateLegend === "function") updateLegend();
+    if (typeof refreshCard === "function") refreshCard();
+    if (typeof refreshIndexPanels === "function") refreshIndexPanels();
+  }
+
   function boot() {
     buildIndex();
     POWER_BY_NAME = window.POWER_INDEX || {};
@@ -225,16 +358,19 @@
         COUNTRIES_GEO = geo;
         decorate(geo);
         addLayers(geo);
+        autoRegisterThemedPaint();
+        applyTheme(THEME_NAME);
         refreshConflict();
         refreshPower();
         refreshNewspulse();
         refreshPortwatch();
         fetch("data/vdem.json", { cache: "no-store" })
           .then(function (r) { if (r.ok) return r.json(); throw 0; })
-          .then(function (d) { VDEM = d; applyYear(); })
+          .then(function (d) { VDEM = d; clearRankCache(); applyYear(); refreshIndexPanels(); })
           .catch(function () {});
         buildRail();
         wireInteraction();
+        restoreIndexPanels();
         byId("overlay").classList.add("hide");
         // Background upgrade: swap to 10m geometry for crisper bloc outlines
         // and coastlines once the initial 50m paint is on screen. Idle-time
@@ -305,6 +441,52 @@
     var vy = idx[y] || idx[String(year - 1)];
     return (vy && vy[name] !== undefined) ? vy[name] : -1;
   }
+
+  /* V-Dem core five, in dossier display order. All are 0-1 interval scales
+     rendered x100 by the fetch script - not percentages, not percentiles. */
+  var VDEM_INDICES = [
+    { key: "polyarchy", label: "Electoral democracy" },
+    { key: "libdem",    label: "Liberal democracy" },
+    { key: "partipdem", label: "Participatory" },
+    { key: "delibdem",  label: "Deliberative" },
+    { key: "egaldem",   label: "Egalitarian" }
+  ];
+  // Regimes of the World (v2x_regime) — ordinal, so it shares the score ramp
+  // rather than needing its own colour scheme.
+  var REGIME_LABEL = ["Closed autocracy", "Electoral autocracy",
+                      "Electoral democracy", "Liberal democracy"];
+
+  /* Ranks are computed in the browser and memoised by metric+year rather than
+     baked into vdem.json — ~180 rows sort in well under a millisecond, and
+     precomputing would multiply the file by year and metric for no gain. */
+  var RANK_CACHE = {};
+  function clearRankCache() { RANK_CACHE = {}; }
+  function rankTable(metric, year) {
+    var ck = metric + ":" + year;
+    if (RANK_CACHE[ck]) return RANK_CACHE[ck];
+    var idx = VDEM && (VDEM[metric] || (metric === "libdem" && !VDEM.libdem ? VDEM : null));
+    var rows = [];
+    if (idx) {
+      var y = String(Math.min(year, 2025));
+      var vy = idx[y] || idx[String(year - 1)] || {};
+      Object.keys(vy).forEach(function (n) {
+        var v = vy[n];
+        if (typeof v === "number" && v >= 0) rows.push({ name: n, value: v });
+      });
+    }
+    rows.sort(function (a, b) {
+      return b.value - a.value || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+    });
+    var byName = {};
+    for (var i = 0; i < rows.length; i++) {
+      // competition ranking: ties share a rank, the next rank skips accordingly
+      rows[i].rank = (i > 0 && rows[i].value === rows[i - 1].value)
+        ? rows[i - 1].rank : i + 1;
+      byName[rows[i].name] = rows[i];
+    }
+    RANK_CACHE[ck] = { rows: rows, byName: byName, total: rows.length };
+    return RANK_CACHE[ck];
+  }
   // Year-aware top trade partner. Static data.TRADE_PARTNER is the current
   // partner ("us"/"china"); TRADE_PARTNER_CHANGES[name] gives the year of
   // the most recent flip — before that year, the lookup returns the
@@ -369,6 +551,10 @@
       f.properties.trader = traderAt(f.properties.cname, CUR_YEAR);
       f.properties.vdem = vdemAt("libdem", CUR_YEAR, f.properties.cname);
       f.properties.freexp = vdemAt("freexp", CUR_YEAR, f.properties.cname);
+      VDEM_INDICES.forEach(function (m) {
+        f.properties["vd_" + m.key] = vdemAt(m.key, CUR_YEAR, f.properties.cname);
+      });
+      f.properties.regime = vdemAt("regime", CUR_YEAR, f.properties.cname);
       f.properties.usbase = (window.USBASE_HOSTS || []).indexOf(f.properties.cname) >= 0;
       f.properties.oil = (window.OIL_PRODUCTION || {})[st.iso3 || ""] || 0;
       f.properties.offshore = !!(key && listSet(window.RIMLAND_OFFSHORE)[key]);
@@ -437,6 +623,22 @@
     COUNTRY_POINTS_GEO = buildCountryPoints(geo);
     map.addSource("country-points", { type: "geojson", data: COUNTRY_POINTS_GEO });
 
+    // land base — flat cream landmass for the light theme. Sits above the
+    // raster basemap and below every choropleth, so paint order is unchanged.
+    // Opacity 0 in dark mode leaves the raster basemap showing through.
+    map.addLayer({ id: "land-base", type: "fill", source: "countries",
+      paint: { "fill-color": TH("landBase"), "fill-opacity": TH("landBaseOpacity") } });
+    themed("land-base", "fill-color", "landBase");
+    themed("land-base", "fill-opacity", "landBaseOpacity");
+
+    // coastline hairline — separates land from sea regardless of how close the
+    // choropleth band and the sea colour get. Light theme only.
+    map.addLayer({ id: "coastline", type: "line", source: "countries",
+      paint: { "line-color": TH("coast"), "line-width": 0.5,
+               "line-opacity": TH("landBaseOpacity") } });
+    themed("coastline", "line-color", "coast");
+    themed("coastline", "line-opacity", "landBaseOpacity");
+
     // power-tier fill
     map.addLayer({ id: "fill-tier", type: "fill", source: "countries",
       paint: { "fill-color": ["match", ["get", "tier"],
@@ -503,19 +705,15 @@
         "us", "#4DA3FF", "china", "#FF4D4D", "#222C3B"], "fill-opacity": 0.6 },
       layout: { visibility: "none" } });
 
-    // V-Dem liberal democracy index (0-100)
+    // V-Dem fills — five discrete score bands, the same ones the country
+    // dossier bars use. `bandFill` builds a step expression, so a country at
+    // 59 and one at 61 read as different bands rather than a smooth blend.
     map.addLayer({ id: "fill-vdem", type: "fill", source: "countries",
-      paint: { "fill-color": ["interpolate", ["linear"], ["get", "vdem"],
-        -1, "#222C3B", 0, "#8E2F4F", 25, "#C2552E", 50, "#C9A227", 75, "#4E9E6E", 100, "#3FE08A"],
-        "fill-opacity": 0.62 },
+      paint: { "fill-color": bandFill("vdem"), "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
-    // V-Dem freedom of expression index (0-100) — distinct blue-violet ramp
-    // so it reads differently from the libdem fill at a glance.
     map.addLayer({ id: "fill-freexp", type: "fill", source: "countries",
-      paint: { "fill-color": ["interpolate", ["linear"], ["get", "freexp"],
-        -1, "#222C3B", 0, "#3B1F4F", 25, "#6E2F8A", 50, "#A07AC4", 75, "#5BC8FF", 100, "#A8E8FF"],
-        "fill-opacity": 0.62 },
+      paint: { "fill-color": bandFill("freexp"), "fill-opacity": 0.62 },
       layout: { visibility: "none" } });
 
     // Arable land — % of land area (World Bank AG.LND.ARBL.ZS); missing = -1 dark
@@ -550,7 +748,8 @@
 
     // crisp borders
     map.addLayer({ id: "country-borders", type: "line", source: "countries",
-      paint: { "line-color": "#2b3a55", "line-width": 0.6, "line-opacity": 0.85 } });
+      paint: { "line-color": TH("borders"), "line-width": 0.6, "line-opacity": 0.85 } });
+    themed("country-borders", "line-color", "borders");
 
     // bloc outlines
     BLOCS.forEach(function (b) {
@@ -1472,6 +1671,7 @@
     var src = map.getSource("countries"); if (src) src.setData(COUNTRIES_GEO);
     rebuildStats(); clearAllies(); clearAdversaries(); clearBases(); updateLegend();
     refreshCard();
+    refreshIndexPanels();
   }
   function setYear(y) {
     CUR_YEAR = y;
@@ -1742,6 +1942,12 @@
         '<div class="legend" id="legend"></div>',
         "Choose one — these paint every country.", false) +
 
+      sec("idx", "Index rankings",
+        VDEM_INDICES.map(function (m) {
+          return row("chk", "idx-" + m.key, m.label + " (V-Dem)", !!IDX_PANELS[m.key]);
+        }).join(""),
+        "Opens a floating ranked list. Drag panels by the header — they snap edge to edge, and the arrangement is remembered.", false) +
+
       sec("stats", "Statistics",
         row("rad", "stat-none", "None", state.stat === "none", "statgrp") +
         alpha([
@@ -1997,6 +2203,10 @@
         setVis(k + "-fill", state[k]); setVis(k + "-line", state[k]); tele();
       };
     });
+    VDEM_INDICES.forEach(function (m) {
+      var cb = byId("cb-idx-" + m.key);
+      if (cb) cb.onchange = function () { toggleIndexPanel(m.key, m.label); };
+    });
     byId("cb-lanes").onchange = function (e) {
       state.lanes = e.target.checked;
       setVis("lanes-core", state.lanes); tele();
@@ -2093,9 +2303,9 @@
       : state.fill === "arable"
       ? [["0%", "#23331F"], ["25%", "#6E8F38"], ["60%+", "#E4E86A"]]
       : state.fill === "vdem"
-      ? [["0", "#8E2F4F"], ["50", "#C9A227"], ["100", "#3FE08A"]]
+      ? bandLegend()
       : state.fill === "freexp"
-      ? [["0", "#3B1F4F"], ["50", "#A07AC4"], ["100", "#A8E8FF"]]
+      ? bandLegend()
       : state.fill === "usbases"
       ? [["Hosts US bases/installations", "#C0392B"]]
       : state.fill === "trader"
@@ -2114,6 +2324,13 @@
       return '<span><i style="background:' + i[1] + '"></i>' + i[0] + "</span>";
     }).join("");
     updateStatLegend();
+  }
+
+  // Legend for the five score bands, plus the themed no-data swatch. Built from
+  // BANDS so the legend can never drift from the fill it describes.
+  function bandLegend() {
+    return BANDS.map(function (b) { return [b.label, b.color]; })
+                .concat([["No data", TH("nodata")]]);
   }
 
   // legend strip for the active statistic. Renders only in choropleth mode
@@ -2167,6 +2384,7 @@
     map.on("click", "countries-hit", function (e) {
       var p = e.features[0].properties;
       showCard(p);
+      refreshIndexPanels();
       if (state.allymode) showAllies(p.cname);
       if (state.advmode) showAdversaries(p.cname);
       if (state.basesmode) showBases(p.cname);
@@ -2208,6 +2426,11 @@
       } catch (err) { console.error(err); }
       tp.textContent = state.flat ? "GLOBE ◯" : "FLAT ▭";
       tp.classList.toggle("on", state.flat);
+    };
+
+    var tt = byId("t-theme");
+    if (tt) tt.onclick = function () {
+      applyTheme(THEME_NAME === "dark" ? "light" : "dark");
     };
 
     // auto-spin
@@ -2288,6 +2511,238 @@
     if (f) showCard(f.properties);
   }
 
+  /* ---- floating index ranking panels -------------------------------------
+     One IndexPanel per V-Dem metric, opened from the rail. Draggable by the
+     header, snapping to each other's edges so three indices can be lined up
+     side by side for a screenshot. Layout persists to localStorage.
+
+     Drag uses pointer events with setPointerCapture (one code path for mouse,
+     trackpad, touch and pen) and moves via CSS transform rather than left/top,
+     which avoids a layout pass on every frame. */
+  var IDX_PANELS = {};
+  var IDX_Z = 8;
+  var IDX_STORE = "geostrat:idxpanels:v1";
+
+  function idxLoadLayout() {
+    try { return JSON.parse(localStorage.getItem(IDX_STORE) || "{}") || {}; }
+    catch (e) { return {}; }
+  }
+  function idxSaveLayout() {
+    var out = {};
+    Object.keys(IDX_PANELS).forEach(function (k) {
+      var p = IDX_PANELS[k];
+      out[k] = { x: p.x, y: p.y };
+    });
+    try { localStorage.setItem(IDX_STORE, JSON.stringify(out)); } catch (e) {}
+  }
+
+  function IndexPanel(metric, label) {
+    var self = this;
+    this.metric = metric;
+    this.label = label;
+
+    var el = document.createElement("div");
+    el.className = "idx-panel";
+    el.innerHTML =
+      '<div class="idx-head"><span class="idx-title"></span>' +
+      '<button class="idx-close" aria-label="Close">✕</button></div>' +
+      '<div class="idx-body"></div>';
+    document.body.appendChild(el);
+
+    this.el = el;
+    this.head = el.querySelector(".idx-head");
+    this.body = el.querySelector(".idx-body");
+    el.querySelector(".idx-title").textContent = label;
+    el.querySelector(".idx-close").onclick = function () { self.close(); };
+
+    // stagger new panels so they don't stack exactly on top of each other
+    var n = Object.keys(IDX_PANELS).length;
+    var saved = idxLoadLayout()[metric];
+    this.x = saved ? saved.x : 0;
+    this.y = saved ? saved.y : 0;
+    el.style.left = (18 + (saved ? 0 : n * 24)) + "px";
+    el.style.top = (110 + (saved ? 0 : n * 24)) + "px";
+    el.style.transform = "translate(" + this.x + "px," + this.y + "px)";
+    el.style.zIndex = ++IDX_Z;
+
+    this.wireDrag();
+    this.render();
+  }
+
+  IndexPanel.prototype.wireDrag = function () {
+    var self = this, sx = 0, sy = 0, ox = 0, oy = 0, active = false;
+    this.head.addEventListener("pointerdown", function (e) {
+      if (e.target.classList.contains("idx-close")) return;
+      active = true;
+      try { self.head.setPointerCapture(e.pointerId); } catch (err) {}
+      sx = e.clientX; sy = e.clientY; ox = self.x; oy = self.y;
+      self.el.style.zIndex = ++IDX_Z;
+      self.head.classList.add("grabbing");
+      e.preventDefault();
+    });
+    this.head.addEventListener("pointermove", function (e) {
+      if (!active) return;
+      self.moveTo(ox + (e.clientX - sx), oy + (e.clientY - sy));
+    });
+    function end() {
+      if (!active) return;
+      active = false;
+      self.head.classList.remove("grabbing");
+      self.snap();
+      idxSaveLayout();
+    }
+    this.head.addEventListener("pointerup", end);
+    this.head.addEventListener("pointercancel", end);
+  };
+
+  // Clamp against the viewport so a panel can never be dragged out of reach.
+  IndexPanel.prototype.moveTo = function (nx, ny) {
+    var r = this.el.getBoundingClientRect();
+    var left0 = r.left - this.x, top0 = r.top - this.y;
+    nx = Math.max(8 - left0, Math.min(nx, window.innerWidth - left0 - r.width - 8));
+    ny = Math.max(8 - top0, Math.min(ny, window.innerHeight - top0 - r.height - 8));
+    this.x = nx; this.y = ny;
+    this.el.style.transform = "translate(" + nx + "px," + ny + "px)";
+  };
+
+  // On release, align a touching edge if it's within 16px of another panel.
+  IndexPanel.prototype.snap = function () {
+    var me = this.el.getBoundingClientRect(), dx = 0, dy = 0, self = this;
+    Object.keys(IDX_PANELS).forEach(function (k) {
+      var o = IDX_PANELS[k];
+      if (o === self) return;
+      var r = o.el.getBoundingClientRect();
+      if (Math.abs(me.left - r.right) < 16) dx = r.right - me.left;
+      else if (Math.abs(me.right - r.left) < 16) dx = r.left - me.right;
+      if (Math.abs(me.top - r.top) < 16) dy = r.top - me.top;
+    });
+    if (dx || dy) this.moveTo(this.x + dx, this.y + dy);
+  };
+
+  IndexPanel.prototype.render = function () {
+    var t = rankTable(this.metric, CUR_YEAR), self = this;
+    if (!t.total) {
+      this.body.innerHTML = '<p class="idx-empty">No data for ' + this.label +
+        " in " + Math.min(CUR_YEAR, 2025) +
+        ". The V-Dem workflow may not have run since this index was added.</p>";
+      return;
+    }
+    var html = t.rows.map(function (r) {
+      var active = r.name === CARD_OPEN ? " active" : "";
+      return '<div class="idx-row' + active + '" data-name="' +
+        String(r.name).replace(/"/g, "&quot;") + '">' +
+        '<span class="idx-rank">' + r.rank + "</span>" +
+        '<span class="idx-name">' + r.name + "</span>" +
+        '<span class="idx-score" style="color:' + bandColor(r.value) + '">' +
+        Math.round(r.value) + "</span></div>";
+    }).join("");
+    this.body.innerHTML = html;
+    this.body.onclick = function (e) {
+      var row = e.target.closest ? e.target.closest(".idx-row") : null;
+      if (!row) return;
+      self.selectCountry(row.getAttribute("data-name"));
+    };
+    // keep the highlighted country in view when the panel re-renders
+    var act = this.body.querySelector(".idx-row.active");
+    if (act && act.scrollIntoView) act.scrollIntoView({ block: "center" });
+  };
+
+  IndexPanel.prototype.selectCountry = function (name) {
+    if (!COUNTRIES_GEO) return;
+    var f = COUNTRIES_GEO.features.filter(function (x) {
+      return x.properties.cname === name;
+    })[0];
+    if (!f) return;
+    showCard(f.properties);
+    byId("card").classList.add("show");
+    var c = centroid(f.geometry);
+    if (c) map.easeTo({ center: c, duration: 700 });
+    refreshIndexPanels();
+  };
+
+  IndexPanel.prototype.close = function () {
+    this.el.parentNode && this.el.parentNode.removeChild(this.el);
+    delete IDX_PANELS[this.metric];
+    idxSaveLayout();
+    // sync the rail checkbox directly rather than rebuilding the whole rail,
+    // which would collapse whatever sections the user has open
+    var cb = byId("cb-idx-" + this.metric);
+    if (cb) cb.checked = false;
+  };
+
+  function toggleIndexPanel(metric, label) {
+    if (IDX_PANELS[metric]) { IDX_PANELS[metric].close(); return; }
+    IDX_PANELS[metric] = new IndexPanel(metric, label);
+    idxSaveLayout();
+    var cb = byId("cb-idx-" + metric);
+    if (cb) cb.checked = true;
+  }
+  function refreshIndexPanels() {
+    Object.keys(IDX_PANELS).forEach(function (k) { IDX_PANELS[k].render(); });
+  }
+  // Reopen whatever was on screen last session, in its saved position.
+  function restoreIndexPanels() {
+    var layout = idxLoadLayout();
+    VDEM_INDICES.forEach(function (m) {
+      if (layout[m.key] && !IDX_PANELS[m.key]) toggleIndexPanel(m.key, m.label);
+    });
+  }
+
+  /* Renders the V-Dem block: regime badge, five score bars with ranks, note.
+     Missing data arrives as the -1 sentinel from vdemAt. -1 falls inside the
+     0-20 band, so it MUST be filtered before any band lookup or a country with
+     no coverage would render a confident red bar reading "deeply autocratic"
+     instead of "unknown". */
+  function renderVdemBlock(p) {
+    var wrap = byId("card-vdem"), note = byId("card-vdem-note"),
+        field = byId("card-vdem-field"), badge = byId("card-regime");
+
+    var regime = p.regime;
+    if (badge) {
+      var hasRegime = typeof regime === "number" && regime >= 0 && regime <= 3;
+      badge.innerHTML = hasRegime
+        ? '<span class="regime-badge">' + REGIME_LABEL[regime] + "</span>" : "";
+      badge.style.display = hasRegime ? "" : "none";
+    }
+    if (!wrap) return;
+
+    var any = false;
+    var html = VDEM_INDICES.map(function (m) {
+      var v = p["vd_" + m.key];
+      var known = typeof v === "number" && v >= 0;
+      if (!known) {
+        return '<div class="vd-row"><div class="vd-top"><span>' + m.label +
+               '</span><span class="vd-nodata">—</span></div>' +
+               '<div class="vd-track"></div></div>';
+      }
+      any = true;
+      var t = rankTable(m.key, CUR_YEAR);
+      var r = t.byName[p.cname];
+      var rankTxt = r ? '<span class="vd-rank">· ' + r.rank + "</span>" : "";
+      var score = Math.round(v);
+      return '<div class="vd-row"><div class="vd-top"><span>' + m.label +
+             '</span><span><b>' + score + "</b> " + rankTxt + "</span></div>" +
+             '<div class="vd-track"><i style="width:' + Math.max(0, Math.min(100, v)) +
+             "%;background:" + bandColor(v) + '"></i></div></div>';
+    }).join("");
+
+    // If the whole set is missing, say so once rather than printing five dashes.
+    if (!any) {
+      html = '<p class="vd-nodata-all">No V-Dem coverage for this country' +
+             (VDEM ? "" : " (index not loaded yet)") + ".</p>";
+    }
+    wrap.innerHTML = html;
+    if (field) field.style.display = "";
+
+    var total = any ? rankTable("libdem", CUR_YEAR).total : 0;
+    if (note) {
+      note.textContent = any
+        ? "V-Dem indices (0–1) ×100. Not percentages or percentiles. Fixed bands. " +
+          "Ranked of " + total + ", year " + Math.min(CUR_YEAR, 2025) + "."
+        : "";
+    }
+  }
+
   function showCard(p) {
     CARD_OPEN = p.cname;
     setText("card-name", p.cname);
@@ -2296,6 +2751,8 @@
     var chips = [];
     BLOCS.forEach(function (b) { if (p[b.key]) chips.push('<span class="chip">' + b.label + "</span>"); });
     setHTML("card-blocs", chips.length ? chips.join("") : '<span class="value">—</span>');
+
+    renderVdemBlock(p);
 
     var st = powerOf(p.cname);
     var yearLabel = CUR_YEAR >= 2026 ? "live" : CUR_YEAR;
