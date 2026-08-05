@@ -369,8 +369,9 @@
     buildIndex();
     POWER_BY_NAME = window.POWER_INDEX || {};
 
-    var COUNTRIES_50M = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json";
-    var COUNTRIES_10M = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-10m.json";
+    // Vendored locally (data/world) so first paint never waits on a CDN.
+    var COUNTRIES_50M = "data/world/countries-50m.json";
+    var COUNTRIES_10M = "data/world/countries-10m.json";
     fetch(COUNTRIES_50M)
       .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
       .then(function (topo) {
@@ -396,6 +397,8 @@
         wireInteraction();
         restoreIndexPanels();
         byId("overlay").classList.add("hide");
+        applyDeepLink();          // honour ?layers=…&lat=…&lon=…&zoom=…
+        wireExternalControl();    // let a host page (e.g. Janus) drive the globe
         // Background upgrade: swap to 10m geometry for crisper bloc outlines
         // and coastlines once the initial 50m paint is on screen. Idle-time
         // scheduling so it doesn't delay first interaction.
@@ -408,6 +411,112 @@
              "your browser is blocking the download — publish it to GitHub Pages (or run a local server) " +
              "and it will work.<br><br><span style='opacity:.6'>" + (err && err.message) + "</span>");
       });
+  }
+
+  /* ==========================================================================
+     EXTERNAL CONTROL API
+     Lets another page open Geostrat on a particular view, either by URL:
+       index.html?layers=heartland,rimland&lat=45&lon=75&zoom=2.4&flat=1&year=1990
+     or, once loaded, by postMessage from a parent frame:
+       frame.contentWindow.postMessage({ type:"geostrat", layers:["rimland"],
+                                         lat:35, lon:100, zoom:2.2 }, "*");
+     Layer keys are the same ones used by state / the cb-* rail checkboxes,
+     e.g. heartland, rimland, shatter, islandchains, pearls, deltas,
+     chokepoints, lanes, bri, nuclear, newspulse.
+     ======================================================================== */
+
+  // Flip a rail checkbox and fire its handler, so external control goes through
+  // exactly the same code path as a human clicking the rail.
+  function gsSetLayer(key, on) {
+    var cb = byId("cb-" + key);
+    if (!cb) return false;
+    if (!!cb.checked !== !!on) {
+      cb.checked = !!on;
+      if (typeof cb.onchange === "function") cb.onchange({ target: cb });
+      else cb.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    return true;
+  }
+
+  function gsApply(o) {
+    if (!o) return;
+    var unknown = [];
+    if (o.layers) {
+      var list = typeof o.layers === "string"
+        ? o.layers.split(",")
+        : (o.layers || []);
+      list.forEach(function (k) {
+        k = String(k).trim();
+        if (k && !gsSetLayer(k, true)) unknown.push(k);
+      });
+    }
+    if (o.off) {
+      var offs = typeof o.off === "string" ? o.off.split(",") : o.off;
+      offs.forEach(function (k) { gsSetLayer(String(k).trim(), false); });
+    }
+    if (o.flat != null) {
+      var wantFlat = !(o.flat === false || o.flat === "0" || o.flat === 0);
+      if (!!state.flat !== wantFlat) { var p = byId("t-proj"); if (p) p.click(); }
+    }
+    if (o.year != null) {
+      var yr = byId("t-year");
+      if (yr) { yr.value = o.year; yr.dispatchEvent(new Event("input", { bubbles: true })); }
+    }
+    var hasLat = o.lat != null && o.lat !== "";
+    var hasLon = o.lon != null && o.lon !== "";
+    var hasZoom = o.zoom != null && o.zoom !== "";
+    if (hasLat || hasLon || hasZoom) {
+      var c = map.getCenter();
+      map.flyTo({
+        center: [hasLon ? +o.lon : c.lng, hasLat ? +o.lat : c.lat],
+        zoom: hasZoom ? +o.zoom : map.getZoom(),
+        speed: 1.6,
+        essential: true
+      });
+    }
+    if (unknown.length && window.console) {
+      console.warn("[geostrat] unknown layer key(s):", unknown.join(", "));
+    }
+    return unknown;
+  }
+
+  function applyDeepLink() {
+    var qs;
+    try { qs = new URLSearchParams(window.location.search); } catch (e) { return; }
+    if (!qs || !qs.toString()) return;
+    var o = {};
+    ["layers", "off", "lat", "lon", "zoom", "flat", "year"].forEach(function (k) {
+      if (qs.has(k)) o[k] = qs.get(k);
+    });
+    gsApply(o);
+  }
+
+  function wireExternalControl() {
+    window.addEventListener("message", function (ev) {
+      var d = ev && ev.data;
+      if (!d || d.type !== "geostrat") return;
+      gsApply(d);
+      // Acknowledge so the host knows the view was applied.
+      try {
+        if (ev.source) ev.source.postMessage({ type: "geostrat:ok", applied: d }, "*");
+      } catch (e) {}
+    });
+    // Also expose a direct handle for same-origin embedding.
+    window.geostrat = {
+      apply: gsApply,
+      setLayer: gsSetLayer,
+      layers: function () {
+        return Array.prototype.slice
+          .call(document.querySelectorAll('[id^="cb-"]'))
+          .map(function (el) { return el.id.slice(3); });
+      }
+    };
+    // Tell any parent frame we're ready to receive commands.
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ type: "geostrat:ready" }, "*");
+      }
+    } catch (e) {}
   }
 
   // Fetch the higher-resolution Natural Earth (10m) layer in the background and

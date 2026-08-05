@@ -5,18 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
   <title>Geostrat — interactive geostrategic globe</title>
 
-  <!-- MapLibre GL (globe-capable) -->
-  <link href="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.css" rel="stylesheet" />
-  <script src="https://unpkg.com/maplibre-gl@5.24.0/dist/maplibre-gl.js"></script>
-  <!-- TopoJSON decoder (to turn the world map data into polygons) -->
-  <script src="https://unpkg.com/topojson-client@3/dist/topojson-client.min.js"></script>
+  <!-- MapLibre GL (globe-capable) — vendored locally: no third-party round-trip -->
+  <link href="vendor/maplibre-gl.css" rel="stylesheet" />
 
-  <!-- Fonts -->
+  <!-- Fonts: loaded non-blocking so first paint never waits on them -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
 
   <link href="styles.css" rel="stylesheet" />
+
+  <!-- Engine + decoder. defer = downloaded in parallel, run in order after parse. -->
+  <script defer src="vendor/maplibre-gl.js"></script>
+  <script defer src="vendor/topojson-client.min.js"></script>
 </head>
 <body>
   <div id="map"></div>
@@ -72,27 +75,27 @@
   <div class="overlay" id="overlay"><p class="pulse" id="overlay-msg">Acquiring world geometry…</p></div>
 
   <!-- Data (edit these in /data — no code required) -->
-  <script src="data/countries.js"></script>
-  <script src="data/chokepoints.js"></script>
-  <script src="data/conflict-sample.js"></script>
-  <script src="data/theory-zones.js"></script>
-  <script src="data/theory-meta.js"></script>
-  <script src="data/power-sample.js"></script>
-  <script src="data/newspulse-sample.js"></script>
-  <script src="data/shipping-lanes.js"></script>
-  <script src="data/bri.js"></script>
-  <script src="data/religion.js"></script>
-  <script src="data/conflicts.js"></script>
-  <script src="data/bases.js"></script>
-  <script src="data/proposals.js"></script>
-  <script src="data/tradepartner.js"></script>
-  <script src="data/resources.js"></script>
-  <script src="data/resource-basins.js"></script>
-  <script src="data/deltas.js"></script>
-  <script src="data/haushofer.js"></script>
-  <script src="data/agriculture.js"></script>
+  <script defer src="data/countries.js"></script>
+  <script defer src="data/chokepoints.js"></script>
+  <script defer src="data/conflict-sample.js"></script>
+  <script defer src="data/theory-zones.js"></script>
+  <script defer src="data/theory-meta.js"></script>
+  <script defer src="data/power-sample.js"></script>
+  <script defer src="data/newspulse-sample.js"></script>
+  <script defer src="data/shipping-lanes.js"></script>
+  <script defer src="data/bri.js"></script>
+  <script defer src="data/religion.js"></script>
+  <script defer src="data/conflicts.js"></script>
+  <script defer src="data/bases.js"></script>
+  <script defer src="data/proposals.js"></script>
+  <script defer src="data/tradepartner.js"></script>
+  <script defer src="data/resources.js"></script>
+  <script defer src="data/resource-basins.js"></script>
+  <script defer src="data/deltas.js"></script>
+  <script defer src="data/haushofer.js"></script>
+  <script defer src="data/agriculture.js"></script>
 
   <!-- App -->
-  <script src="app.js"></script>
+  <script defer src="app.js"></script>
 </body>
 </html>
